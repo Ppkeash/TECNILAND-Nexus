@@ -2,7 +2,7 @@
 
 **Un launcher de Minecraft moderno, estable y pensado para la comunidad.**
 
-> 🌍 [Español](README.en.md) | 🇪🇸 **Ingles**
+> 🌍 [English](README.en.md) | 🇪🇸 **Español**
 
 ---
 
@@ -178,6 +178,7 @@ Hemos probado exhaustivamente todas las versiones de Forge desde Minecraft 1.13 
   - Almacenamiento de estadísticas.
   - Noticias centralizadas.
   - Sistema de perfiles de usuario.
+    *Todo centralizado en la pagina WEB oficial de TECNILAND Nexus (actualmente en desarrollo)
 
 - [ ] **Multiplayer Directo**
   - Crear servidores temporales.
@@ -237,7 +238,7 @@ Hemos probado exhaustivamente todas las versiones de Forge desde Minecraft 1.13 
 
    Se abrirá el launcher en modo desarrollo.
 
-4. **Buildear para distribución** (opcional)
+4. **Buildear para distribución** (opcional-no recomendado aún)
 
    ```bash
    npm run dist
@@ -363,11 +364,11 @@ Permission is hereby granted, free of charge, to any person obtaining a copy...
 ## 📞 Soporte y Contacto
 
 - **GitHub Issues:** Reporta bugs o pide features.
-- **Discord:** *Próximamente integrado en el launcher.*
-- **Email:** Añadir contacto en desarrollo.
+- **Discord:** *Próximamente integrado en el launcher --> https://discord.gg/eDmCZnc8tv <--.*
+- **Email:** tutosmaspros@gmail.com
 
 ---
 
-**TECNILAND Nexus - Hecho con ❤️ para la comunidad Minecraft.**
+**TECNILAND Nexus - Hecho con mucho amor 💚 para la comunidad de 💚 TECNILAND 💚.**
 
-*Versión: 0.1.0-beta | Última actualización: Diciembre 2024*
+*Versión: 0.1.0-beta | Última actualización: Diciembre 2025*
