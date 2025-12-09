@@ -144,7 +144,7 @@ ipcMain.on(MSFT_OPCODE.OPEN_LOGIN, (ipcEvent, ...arguments_) => {
         width: 520,
         height: 600,
         frame: true,
-        icon: getPlatformIcon('SealCircle')
+        icon: getPlatformIcon('tecniland')
     })
 
     msftAuthWindow.on('closed', () => {
@@ -197,7 +197,7 @@ ipcMain.on(MSFT_OPCODE.OPEN_LOGOUT, (ipcEvent, uuid, isLastAccount) => {
         width: 520,
         height: 600,
         frame: true,
-        icon: getPlatformIcon('SealCircle')
+        icon: getPlatformIcon('tecniland')
     })
 
     msftLogoutWindow.on('closed', () => {
@@ -243,7 +243,7 @@ function createWindow() {
     win = new BrowserWindow({
         width: 980,
         height: 552,
-        icon: getPlatformIcon('SealCircle'),
+        icon: getPlatformIcon('tecniland'),
         frame: false,
         webPreferences: {
             preload: path.join(__dirname, 'app', 'assets', 'js', 'preloader.js'),
@@ -352,7 +352,7 @@ function getPlatformIcon(filename){
             break
     }
 
-    return path.join(__dirname, 'app', 'assets', 'images', `${filename}.${ext}`)
+    return path.join(__dirname, 'app', 'assets', 'images', 'icons', `${filename}.${ext}`)
 }
 
 app.on('ready', createWindow)
