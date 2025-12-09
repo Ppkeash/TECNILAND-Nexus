@@ -2,7 +2,7 @@
 
 **Un launcher de Minecraft moderno, estable y pensado para la comunidad.**
 
-> 🌍 [Español](README.en.md) | 🇪🇸 **Ingles**
+> 🌍 [English](README.en.md) | 🇪🇸 **Español**
 
 ---
 
