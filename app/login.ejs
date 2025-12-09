@@ -61,5 +61,41 @@
             </div>
         </form>
     </div>
+    <!-- Offline Login Form -->
+    <div id="loginOfflineContent" style="display: none;">
+        <form id="loginOfflineForm">
+            <img id="loginOfflineImageSeal" src="assets/images/SealCircle.png"/>
+            <span id="loginOfflineSubheader">INICIO DE SESIÓN OFFLINE</span>
+            <div class="loginFieldContainer">
+                <svg id="offlineProfileSVG" class="loginSVG" viewBox="40 37 65.36 61.43">
+                    <g>
+                        <path d="M86.77,58.12A13.79,13.79,0,1,0,73,71.91,13.79,13.79,0,0,0,86.77,58.12M97,103.67a3.41,3.41,0,0,0,3.39-3.84,27.57,27.57,0,0,0-54.61,0,3.41,3.41,0,0,0,3.39,3.84Z"/>
+                    </g>
+                </svg>
+                <span class="loginErrorSpan" id="loginOfflineUsernameError">* El nombre debe tener 3-16 caracteres (letras, números y guiones bajos)</span>
+                <input id="loginOfflineUsername" class="loginField" type="text" placeholder="NOMBRE DE USUARIO" maxlength="16"/>
+            </div>
+            <div id="loginOfflineInfo">
+                <p class="loginSpanDim" style="text-align: center; margin: 10px 0;">
+                    <svg style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px; fill: #ffca28;" viewBox="0 0 24 24">
+                        <path d="M13,13H11V7H13M13,17H11V15H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" />
+                    </svg>
+                    El modo offline es solo para servidores crackeados.
+                </p>
+            </div>
+            <button id="loginOfflineButton" disabled>
+                <div id="loginOfflineButtonContent">
+                    CONTINUAR
+                    <div class="circle-loader">
+                        <div class="checkmark draw"></div>
+                    </div>
+                </div>
+            </button>
+            <div id="loginOfflineDisclaimer">
+                <p class="loginDisclaimerText" style="text-align: center;">Esta cuenta solo funcionará en servidores offline/crackeados.</p>
+                <p class="loginDisclaimerText" style="text-align: center;">Para servidores premium, usa inicio de sesión con Microsoft o Mojang.</p>
+            </div>
+        </form>
+    </div>
     <script src="./assets/js/scripts/login.js"></script>
 </div>

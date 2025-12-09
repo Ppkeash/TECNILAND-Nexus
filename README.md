@@ -1,211 +1,373 @@
-<p align="center"><img src="./app/assets/images/SealCircle.png" width="150px" height="150px" alt="aventium softworks"></p>
+# 🟢 TECNILAND Nexus
 
-<h1 align="center">Helios Launcher</h1>
+**Un launcher de Minecraft moderno, estable y pensado para la comunidad.**
 
-<em><h5 align="center">(formerly Electron Launcher)</h5></em>
+> 🌍 [Español](README.en.md) | 🇪🇸 **Ingles**
 
-[<p align="center"><img src="https://img.shields.io/github/actions/workflow/status/dscalzi/HeliosLauncher/build.yml?branch=master&style=for-the-badge" alt="gh actions">](https://github.com/dscalzi/HeliosLauncher/actions) [<img src="https://img.shields.io/github/downloads/dscalzi/HeliosLauncher/total.svg?style=for-the-badge" alt="downloads">](https://github.com/dscalzi/HeliosLauncher/releases) <img src="https://forthebadge.com/images/badges/winter-is-coming.svg"  height="28px" alt="winter-is-coming"></p>
+---
 
-<p align="center">Join modded servers without worrying about installing Java, Forge, or other mods. We'll handle that for you.</p>
+## 📋 Índice
 
-![Screenshot 1](https://i.imgur.com/6o7SmH6.png)
-![Screenshot 2](https://i.imgur.com/x3B34n1.png)
+- [Sobre TECNILAND Nexus](#sobre-tecniland-nexus)
+- [Estado Actual (Beta)](#estado-actual-beta)
+- [Características Implementadas](#características-implementadas)
+- [Roadmap & Próximas Features](#roadmap--próximas-features)
+- [Instalación](#instalación)
+- [Guía de Uso](#guía-de-uso)
+- [Desarrollo](#desarrollo)
+- [Licencia y Créditos](#licencia-y-créditos)
 
-## Features
+---
 
-* 🔒 Full account management.
-  * Add multiple accounts and easily switch between them.
-  * Microsoft (OAuth 2.0) + Mojang (Yggdrasil) authentication fully supported.
-  * Credentials are never stored and transmitted directly to Mojang.
-* 📂 Efficient asset management.
-  * Receive client updates as soon as we release them.
-  * Files are validated before launch. Corrupt or incorrect files will be redownloaded.
-* ☕ **Automatic Java validation.**
-  * If you have an incompatible version of Java installed, we'll install the right one *for you*.
-  * You do not need to have Java installed to run the launcher.
-* 📰 News feed natively built into the launcher.
-* ⚙️ Intuitive settings management, including a Java control panel.
-* Supports all of our servers.
-  * Switch between server configurations with ease.
-  * View the player count of the selected server.
-* Automatic updates. That's right, the launcher updates itself.
-*  View the status of Mojang's services.
+## 🎮 Sobre TECNILAND Nexus
 
-This is not an exhaustive list. Download and install the launcher to gauge all it can do!
+**TECNILAND Nexus** es un fork especializado de [HeliosLauncher](https://github.com/dscalzi/HeliosLauncher) diseñado para ofrecer una experiencia optimizada en la instalación y gestión de versiones de Minecraft con soporte completo de **Forge 1.13+**.
 
-#### Need Help? [Check the wiki.][wiki]
+Nace con la visión de ser más que un simple launcher: queremos crear un **ecosistema** donde jugadores y modders puedan disfrutar de Minecraft modded de forma fácil, intuitiva y confiable. Con características como:
 
-#### Like the project? Leave a ⭐ star on the repository!
+- ✅ **Soporte Multi-Loader:** Forge completamente integrado (Fabric, Quilt, NeoForge en desarrollo).
+- ✅ **JavaManager Automático:** Gestión inteligente de versiones de Java según cada instalación.
+- ✅ **Live Log Viewer:** Panel de logs en tiempo real con diseño estético verde/negro TECNILAND.
+- ✅ **Modpacks TECNILAND:** Instalaciones preconfiguradas listas para jugar.
+- ✅ **Cuentas Offline:** Soporte completo de cuentas sin Microsoft Account.
 
-## Downloads
+Estamos en **fase Beta (0.x.x)**, lo que significa que el launcher es funcional y estable, pero aún está en desarrollo activo con nuevas features llegando regularmente.
 
-You can download from [GitHub Releases](https://github.com/dscalzi/HeliosLauncher/releases)
+---
 
-#### Latest Release
+## 📊 Estado Actual (Beta)
 
-[![](https://img.shields.io/github/release/dscalzi/HeliosLauncher.svg?style=flat-square)](https://github.com/dscalzi/HeliosLauncher/releases/latest)
+### ✅ Forge 1.13 → 1.21.x Completamente Funcional
 
-#### Latest Pre-Release
-[![](https://img.shields.io/github/release/dscalzi/HeliosLauncher/all.svg?style=flat-square)](https://github.com/dscalzi/HeliosLauncher/releases)
+Hemos probado exhaustivamente todas las versiones de Forge desde Minecraft 1.13 hasta 1.21.x. Aquí están los resultados:
 
-**Supported Platforms**
+| Versión MC | Estado | Detalles |
+|-----------|--------|---------|
+| 1.13.x    | ✅ OK  | Funcional, cuentas offline soportadas |
+| 1.14.x    | ✅ OK  | Soporte completo |
+| 1.15.2    | ✅ OK  | Arreglado: Log4j2 conflict resolution |
+| 1.16.x    | ✅ OK  | Todas las variantes (1.16.0-1.16.5) funcionales |
+| 1.17.1    | ✅ OK  | Soporte completo |
+| 1.18.2    | ✅ OK  | Versión estable muy utilizada |
+| 1.19.4    | ✅ OK  | Arreglado: Classpath deduplication |
+| 1.20.1    | ✅ OK  | Soporte completo, muy estable |
+| 1.21.x    | ✅ OK  | Arreglado: Forge universal + client JAR handling |
 
-If you download from the [Releases](https://github.com/dscalzi/HeliosLauncher/releases) tab, select the installer for your system.
+---
 
-| Platform | File |
-| -------- | ---- |
-| Windows x64 | `Helios-Launcher-setup-VERSION.exe` |
-| macOS x64 | `Helios-Launcher-setup-VERSION-x64.dmg` |
-| macOS arm64 | `Helios-Launcher-setup-VERSION-arm64.dmg` |
-| Linux x64 | `Helios-Launcher-setup-VERSION.AppImage` |
+## ✨ Características Implementadas
 
-## Console
+### 🎯 Fase 1: Core (Completada)
 
-To open the console, use the following keybind.
+- **Multi-Loader Forge** - Soporte completo Forge 1.13–1.21.x con integración automática de:
+  - Instaladores Forge descargables.
+  - Processors ejecutables sin errores de módulo.
+  - Classpath management inteligente (deduplicación de librerías).
+  - Generación automática de `version.json` compatible.
 
-```console
-ctrl + shift + i
+- **JavaManager Automático** - Sistema inteligente de gestión de Java:
+  - Detección automática de JDKs instalados.
+  - Asignación de versión correcta por MC version:
+    - MC 1.13–1.16.x → Java 8/17.
+    - MC 1.17–1.20.x → Java 17.
+    - MC 1.20.5+ → Java 17/21.
+  - Descarga automática de Java si no está disponible.
+  - Fallback graceful con mensajes claros al usuario.
+
+- **Cuentas Offline** - Gestión completa de cuentas sin Microsoft:
+  - Crear cuentas locales con cualquier nombre.
+  - Persistencia en la configuración del launcher.
+  - Skins locales cargables (almacenados localmente).
+
+- **Live Log Viewer Nativo** - Panel de logs integrado:
+  - Captura en tiempo real de stdout/stderr de Minecraft.
+  - Buffer circular eficiente (máx. 1000 líneas).
+  - Color-coding automático: INFO (verde), WARN (naranja), ERROR (rojo), DEBUG (cian).
+  - Timestamps `[HH:MM:SS]` en cada línea.
+  - Botones: Limpiar, Copiar al portapapeles, Exportar a `.txt`.
+  - Tema oscuro verde/negro alineado con branding TECNILAND.
+  - Toggle en Ajustes → Launcher para habilitar/deshabilitar.
+
+- **Gestor de Instalaciones Personalizado** (En Desarrollo)
+  - Crear, editar, eliminar instalaciones custom.
+  - Seleccionar versión de MC + Loader (Forge).
+  - Sincronización automática de carpetas `instances/`.
+
+- **Modpacks TECNILAND** (En Desarrollo)
+  - Sección dedicada con modpacks preconfigurados.
+  - Instalación con un clic.
+  - Separación clara en UI entre TECNILAND y instalaciones custom.
+
+- **Integración de UI Profesional**
+  - Diseño responsivo en Electron.
+  - Tema verde/negro coherente.
+  - Navegación intuitiva con tabs y menús.
+  - Traducciones: Español (es_ES) e Inglés (en_US).
+
+---
+
+## 🗓️ Roadmap & Próximas Features
+
+### 📋 Fase 2: Multi-Loader (En Desarrollo)
+
+- [ ] **Soporte Fabric** - Integración completa del loader Fabric.
+  - Descarga de instaladores Fabric.
+  - Meta API para versiones.
+  - Testing exhaustivo Fabric 1.14–1.21.x.
+
+- [ ] **Soporte Quilt** - Loader moderno basado en Fabric.
+  - Integración similar a Fabric.
+  - Compatibilidad con mods Fabric + Quilt propios.
+
+- [ ] **Soporte NeoForge** - Fork moderno de Forge (1.20.2+).
+  - Pipeline similar a Forge pero con endpoint NeoForge.
+  - Diferencias de librerías y argumentos JVM.
+
+- [ ] **Toggle de Loaders Experimentales** - Ya implementado.
+  - Ocultar Fabric, Quilt, NeoForge por defecto.
+  - Modal de advertencia para desarrolladores.
+
+### 🎯 Fase 3: Importación y Gestión Avanzada
+
+- [ ] **Importar Modpacks ZIP** - Drag & drop o selector de archivos.
+  - Descompresión automática.
+  - Validación de estructura.
+  - Instalación en carpeta `instances/`.
+
+- [ ] **Gestor de Modpacks Avanzado**
+  - Vista previa de modpacks.
+  - Información del creador.
+  - Historial de versiones.
+  - Actualizaciones automáticas.
+
+### 🌐 Fase 4: Integración y Comunidad
+
+- [ ] **Discord Rich Presence** - Mostrar estado en Discord.
+  - "Jugando en [Modpack Name] - MC [Versión]".
+  - Tiempo de juego.
+
+- [ ] **Sistema de Skins Personalizado**
+  - Subir skins con cuenta offline.
+  - Sincronización entre usuarios del mismo launcher.
+  - Galería de skins comunitarios.
+
+- [ ] **Versiones Pre-Integradas con Optifine**
+  - Instalaciones listas con Optifine + Forge.
+  - Configuración automática.
+
+- [ ] **Auto-Actualización del Launcher**
+  - Detección de nuevas versiones.
+  - Descarga e instalación automática.
+  - Changelog visible.
+
+### 📊 Fase 5: Analytics y Progresión
+
+- [ ] **Sistema de Estadísticas**
+  - Tiempo jugado por modpack.
+  - Últimos modpacks jugados.
+  - Dashboard en home con gráficos visuales.
+
+- [ ] **Sistema de Logros/Progresión**
+  - Desbloqueo de badges.
+  - Sincronización con servidor (a largo plazo).
+
+### 🚀 Fase Final: Backend y IA
+
+- [ ] **Servidor Backend TECNILAND**
+  - Sincronización de skins.
+  - Almacenamiento de estadísticas.
+  - Noticias centralizadas.
+  - Sistema de perfiles de usuario.
+
+- [ ] **Multiplayer Directo**
+  - Crear servidores temporales.
+  - Invitar amigos directamente.
+  - Sin necesidad de configuración manual.
+
+- [ ] **Tienda de Cosméticos**
+  - Skins exclusivos.
+  - Temas de launcher.
+  - Efectos visuales.
+
+- [ ] **Recomendaciones de Mods Basadas en IA**
+  - Sugerencias inteligentes según estilo de juego.
+  - Análisis de mods compatibles.
+  - Instalación asistida.
+
+- [ ] **Asistente de IA Integrado**
+  - Resolver problemas de crashes.
+  - Responder dudas sobre configuración.
+  - Soporte técnico 24/7.
+
+- [ ] **Tutoriales y Guías en Vídeo**
+  - Onboarding para usuarios nuevos.
+  - Guías de características.
+  - Troubleshooting visual.
+
+---
+
+## 📥 Instalación
+
+### Requisitos Previos
+
+- **Node.js** v18+ ([descargar](https://nodejs.org/))
+- **Git** para clonar el repositorio.
+- **Java** (el launcher manejará versiones automáticamente, pero es recomendable tener al menos Java 17).
+
+### Pasos de Instalación
+
+1. **Clonar el repositorio**
+
+   ```bash
+   git clone https://github.com/Ppkeash/TECNILAND-Nexus.git
+   cd TECNILAND-Nexus
+   ```
+
+2. **Instalar dependencias**
+
+   ```bash
+   npm install
+   ```
+
+3. **Ejecutar en desarrollo**
+
+   ```bash
+   npm start
+   ```
+
+   Se abrirá el launcher en modo desarrollo.
+
+4. **Buildear para distribución** (opcional)
+
+   ```bash
+   npm run dist
+   ```
+
+   Genera ejecutables en la carpeta `dist/`.
+
+---
+
+## 🎮 Guía de Uso
+
+### Primeros Pasos
+
+1. **Crear Cuenta**
+   - Click en "Login" → "Offline".
+   - Ingresa tu nombre de usuario preferido.
+   - ¡Listo! Sesión creada localmente.
+
+2. **Crear Instalación**
+   - Click en botón "+" o "Nueva Instalación".
+   - Selecciona versión de Minecraft (1.13–1.21.x).
+   - Selecciona Loader: **Forge** (recomendado).
+   - Espera a que descargue e instale automáticamente.
+
+3. **Jugar**
+   - Click en "Jugar" en tu instalación.
+   - El launcher descargará Java automáticamente si es necesario.
+   - Se abre Minecraft modded. ¡Disfruta!
+
+### Live Log Viewer
+
+- **Activar:** Ajustes → Launcher → Toggle "Mostrar Logs en Vivo".
+- **Ver Logs:** Cuando lances un juego, aparecerá un panel a la derecha con logs.
+- **Exportar:** Click en botón "Exportar" para guardar logs a archivo `.txt`.
+
+### Gestor de Modpacks
+
+- Sección **"TECNILAND"** en el menú.
+- Selecciona modpack preconfigurando.
+- Click "Instalar" para descargar.
+- ¡Juega con amigos!
+
+---
+
+## 🛠️ Desarrollo
+
+### Estructura del Proyecto
+
+```
+TECNILAND-Nexus/
+├── app/
+│   ├── assets/
+│   │   ├── css/           # Estilos (tema verde/negro)
+│   │   ├── js/            # Lógica del launcher
+│   │   │   ├── forgeprocessor.js    # Procesamiento de Forge
+│   │   │   ├── loaderinstaller.js   # Instalación de loaders
+│   │   │   ├── javamanager.js       # Gestión automática de Java
+│   │   │   ├── livelogviewer.js     # Panel de logs
+│   │   │   ├── processbuilder.js    # Construcción de comandos
+│   │   │   └── configmanager.js     # Configuración persistente
+│   │   └── images/        # Assets visuales
+│   └── assets-src/        # Fuentes pre-compiladas
+├── docs/                  # Documentación técnica
+├── src/                   # Código fuente de Electron
+├── package.json           # Dependencias y scripts
+├── .gitignore             # Archivos ignorados por git
+└── README.md              # Este archivo
 ```
 
-Ensure that you have the console tab selected. Do not paste anything into the console unless you are 100% sure of what it will do. Pasting the wrong thing can expose sensitive information.
+### Stack Tecnológico
 
-#### Export Output to a File
+- **Electron** - Framework para aplicaciones de escritorio.
+- **Node.js + JavaScript** - Backend del launcher.
+- **HTML/CSS** - UI responsiva.
+- **Electron-Builder** - Compilación de ejecutables.
 
-If you want to export the console output, simply right click anywhere on the console and click **Save as..**
+### Contribuir
 
-![console example](https://i.imgur.com/T5e73jP.png)
+1. Fork el repositorio.
+2. Crea una rama: `git checkout -b feature/tu-feature`.
+3. Commit cambios: `git commit -m 'Add: descripción'`.
+4. Push a la rama: `git push origin feature/tu-feature`.
+5. Abre un Pull Request.
 
+### ESLint y Calidad de Código
 
-## Development
-
-This section details the setup of a basic developmentment environment.
-
-### Getting Started
-
-**System Requirements**
-
-* [Node.js][nodejs] v20
-
----
-
-**Clone and Install Dependencies**
-
-```console
-> git clone https://github.com/dscalzi/HeliosLauncher.git
-> cd HeliosLauncher
-> npm install
+```bash
+npm run lint          # Revisar linting
+npm run lint -- --fix # Arreglar automáticamente
 ```
 
 ---
 
-**Launch Application**
+## 📄 Licencia y Créditos
 
-```console
-> npm start
+### Licencia
+
+**TECNILAND Nexus** utiliza la licencia **MIT**, heredada de HeliosLauncher.
+
+```
+MIT License
+
+Copyright (c) 2017-2024 Daniel D. Scalzi (HeliosLauncher)
+Copyright (c) 2024 Ppkeash (TECNILAND Nexus Extensions)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy...
+(Ver LICENSE.txt para el texto completo)
 ```
 
----
+### Créditos
 
-**Build Installers**
+- **[HeliosLauncher](https://github.com/dscalzi/HeliosLauncher)** - Base original del launcher, sistema de login Microsoft, arquitectura modular. Desarrollado por Daniel D. Scalzi.
+- **[TECNILAND Nexus](https://github.com/Ppkeash/TECNILAND-Nexus)** - Extensiones Forge, JavaManager, Live Log Viewer, UI verde/negro, Modpacks TECNILAND. Desarrollado por Ppkeash.
 
-To build for your current platform.
+### Comunidades y Recursos
 
-```console
-> npm run dist
-```
-
-Build for a specific platform.
-
-| Platform    | Command              |
-| ----------- | -------------------- |
-| Windows x64 | `npm run dist:win`   |
-| macOS       | `npm run dist:mac`   |
-| Linux x64   | `npm run dist:linux` |
-
-Builds for macOS may not work on Windows/Linux and vice-versa.
+- [Minecraft Forge Documentation](https://docs.minecraftforge.net/)
+- [Fabric Wiki](https://wiki.fabricmc.net/)
+- [Java Downloads](https://www.java.com/)
 
 ---
 
-### Visual Studio Code
+## 📞 Soporte y Contacto
 
-All development of the launcher should be done using [Visual Studio Code][vscode].
-
-Paste the following into `.vscode/launch.json`
-
-```JSON
-{
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Debug Main Process",
-      "type": "node",
-      "request": "launch",
-      "cwd": "${workspaceFolder}",
-      "program": "${workspaceFolder}/node_modules/electron/cli.js",
-      "args" : ["."],
-      "outputCapture": "std"
-    },
-    {
-      "name": "Debug Renderer Process",
-      "type": "chrome",
-      "request": "launch",
-      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron",
-      "windows": {
-        "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron.cmd"
-      },
-      "runtimeArgs": [
-        "${workspaceFolder}/.",
-        "--remote-debugging-port=9222"
-      ],
-      "webRoot": "${workspaceFolder}"
-    }
-  ]
-}
-```
-
-This adds two debug configurations.
-
-#### Debug Main Process
-
-This allows you to debug Electron's [main process][mainprocess]. You can debug scripts in the [renderer process][rendererprocess] by opening the DevTools Window.
-
-#### Debug Renderer Process
-
-This allows you to debug Electron's [renderer process][rendererprocess]. This requires you to install the [Debugger for Chrome][chromedebugger] extension.
-
-Note that you **cannot** open the DevTools window while using this debug configuration. Chromium only allows one debugger, opening another will crash the program.
+- **GitHub Issues:** Reporta bugs o pide features.
+- **Discord:** *Próximamente integrado en el launcher.*
+- **Email:** Añadir contacto en desarrollo.
 
 ---
 
-### Note on Third-Party Usage
+**TECNILAND Nexus - Hecho con ❤️ para la comunidad Minecraft.**
 
-Please give credit to the original author and provide a link to the original source. This is free software, please do at least this much.
-
-For instructions on setting up Microsoft Authentication, see https://github.com/dscalzi/HeliosLauncher/blob/master/docs/MicrosoftAuth.md.
-
----
-
-## Resources
-
-* [Wiki][wiki]
-* [Nebula (Create Distribution.json)][nebula]
-* [v2 Rewrite Branch (Inactive)][v2branch]
-
-The best way to contact the developers is on Discord.
-
-[![discord](https://discordapp.com/api/guilds/211524927831015424/embed.png?style=banner3)][discord]
-
----
-
-### See you ingame.
-
-
-[nodejs]: https://nodejs.org/en/ 'Node.js'
-[vscode]: https://code.visualstudio.com/ 'Visual Studio Code'
-[mainprocess]: https://electronjs.org/docs/tutorial/application-architecture#main-and-renderer-processes 'Main Process'
-[rendererprocess]: https://electronjs.org/docs/tutorial/application-architecture#main-and-renderer-processes 'Renderer Process'
-[chromedebugger]: https://marketplace.visualstudio.com/items?itemName=msjsdiag.debugger-for-chrome 'Debugger for Chrome'
-[discord]: https://discord.gg/zNWUXdt 'Discord'
-[wiki]: https://github.com/dscalzi/HeliosLauncher/wiki 'wiki'
-[nebula]: https://github.com/dscalzi/Nebula 'dscalzi/Nebula'
-[v2branch]: https://github.com/dscalzi/HeliosLauncher/tree/ts-refactor 'v2 branch'
+*Versión: 0.1.0-beta | Última actualización: Diciembre 2024*

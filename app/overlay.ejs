@@ -1,11 +1,35 @@
 <div id="overlayContainer" style="display: none;">
     <div id="serverSelectContent" style="display: none;">
         <span id="serverSelectHeader"><%- lang('overlay.serverSelectHeader') %></span>
+        
+        <!-- Tabs para alternar entre Instalaciones y Servidores -->
+        <div id="serverSelectTabs" style="display: flex; gap: 10px; margin-bottom: 15px; justify-content: center;">
+            <button id="tabInstallations" class="serverSelectTab active" style="flex: 1; padding: 10px 20px; background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.4); border-radius: 8px; color: white; cursor: pointer; font-weight: 600; transition: all 0.3s;">
+                <span>🎮 INSTALACIONES PERSONALIZADAS</span>
+            </button>
+            <button id="tabServers" class="serverSelectTab" style="flex: 1; padding: 10px 20px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; color: rgba(255,255,255,0.7); cursor: pointer; font-weight: 600; transition: all 0.3s;">
+                <span>🌐 MODPACKS TECNILAND [NO IMPLEMENTADO] </span>
+            </button>
+        </div>
+
         <div id="serverSelectList">
-            <div id="serverSelectListScrollable">
+            <!-- Lista de instalaciones personalizadas -->
+            <div id="installationSelectListScrollable" style="display: block;">
+                <!-- Installation listings populated here. -->
+            </div>
+            <!-- Lista de servidores TECNILAND -->
+            <div id="serverSelectListScrollable" style="display: none;">
                 <!-- Server listings populated here. -->
             </div>
         </div>
+
+        <!-- Botón para crear nueva instalación -->
+        <div id="installationCreateButton" style="text-align: center; margin: 15px 0;">
+            <button id="createNewInstallation" style="padding: 12px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; font-size: 14px; text-transform: uppercase; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); transition: all 0.3s;">
+                ➕ Nueva Instalación
+            </button>
+        </div>
+
         <div id="serverSelectActions">
             <button id="serverSelectConfirm" class="overlayKeybindEnter" type="submit"><%- lang('overlay.serverSelectConfirm') %></button>
             <div id="serverSelectCancelWrapper">
@@ -13,6 +37,61 @@
             </div>
         </div>
     </div>
+
+    <!-- Installation Editor Panel (inline) -->
+    <div id="installationEditorContent" style="display: none;">
+        <span id="installationEditorHeader" style="display: block; text-align: center; font-size: 24px; font-weight: 600; margin-bottom: 10px;">✨ Nueva Instalación</span>
+        <p style="text-align: center; opacity: 0.8; margin-bottom: 25px; font-size: 14px;">Crea una instalación personalizada con tu mod loader favorito</p>
+
+        <div id="installationEditorErrorMessage" style="display: none; background: rgba(244, 67, 54, 0.9); color: white; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 14px;"></div>
+
+        <form id="installationEditorForm">
+            <!-- Nombre -->
+            <div class="installationEditorFormGroup">
+                <label for="installationEditorName">Nombre de la instalación</label>
+                <input type="text" id="installationEditorName" placeholder="Mi Instalación Personalizada" autocomplete="off" required>
+            </div>
+
+            <!-- Mod Loader -->
+            <div class="installationEditorFormGroup">
+                <label>Mod Loader</label>
+                <div id="installationEditorLoaderSelector" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button type="button" class="installationEditorLoaderBtn active" data-loader="vanilla">🟩 Vanilla</button>
+                    <button type="button" class="installationEditorLoaderBtn" data-loader="forge">🔨 Forge</button>
+                    <button type="button" class="installationEditorLoaderBtn" data-loader="fabric">🧵 Fabric</button>
+                    <button type="button" class="installationEditorLoaderBtn" data-loader="quilt">🪡 Quilt</button>
+                    <button type="button" class="installationEditorLoaderBtn" data-loader="neoforge">⚒️ NeoForge</button>
+                </div>
+            </div>
+
+            <!-- Versión de Minecraft -->
+            <div class="installationEditorFormGroup">
+                <label for="installationEditorMcVersion">Versión de Minecraft</label>
+                <select id="installationEditorMcVersion" required>
+                    <option value="">Cargando versiones...</option>
+                </select>
+            </div>
+
+            <!-- Versión del Loader -->
+            <div class="installationEditorFormGroup" id="installationEditorLoaderVersionGroup" style="display: none;">
+                <label for="installationEditorLoaderVersion">Versión del Loader</label>
+                <select id="installationEditorLoaderVersion">
+                    <option value="">Selecciona primero una versión de Minecraft</option>
+                </select>
+            </div>
+
+            <!-- Botones de acción -->
+            <div id="installationEditorActions" style="display: flex; gap: 12px; margin-top: 25px;">
+                <button type="button" id="installationEditorCancel" style="flex: 1; padding: 14px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3); border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
+                    ❌ Cancelar
+                </button>
+                <button type="submit" id="installationEditorCreate" disabled style="flex: 1; padding: 14px; background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
+                    ✅ Crear Instalación
+                </button>
+            </div>
+        </form>
+    </div>
+
     <div id="accountSelectContent" style="display: none;">
         <span id="accountSelectHeader"><%- lang('overlay.accountSelectHeader') %></span>
         <div id="accountSelectList">

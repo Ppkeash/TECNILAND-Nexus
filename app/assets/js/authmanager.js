@@ -16,6 +16,7 @@ const { MojangRestAPI, MojangErrorCode } = require('helios-core/mojang')
 const { MicrosoftAuth, MicrosoftErrorCode } = require('helios-core/microsoft')
 const { AZURE_CLIENT_ID }    = require('./ipcconstants')
 const Lang = require('./langloader')
+const crypto = require('crypto')
 
 const log = LoggerUtil.getLogger('AuthManager')
 
@@ -418,8 +419,180 @@ exports.validateSelected = async function(){
 
     if(current.type === 'microsoft') {
         return await validateSelectedMicrosoftAccount()
+    } else if(current.type === 'offline') {
+        // Offline accounts don't need validation
+        return true
     } else {
         return await validateSelectedMojangAccount()
     }
     
+}
+
+// -------------------- OFFLINE ACCOUNT SUPPORT --------------------
+
+/**
+ * Validates an offline username according to Minecraft standards.
+ * Username must be 3-16 characters, alphanumeric and underscores only.
+ * 
+ * @param {string} username The username to validate.
+ * @returns {boolean} True if valid, false otherwise.
+ */
+function validateOfflineUsername(username) {
+    const minecraftUsernameRegex = /^[a-zA-Z0-9_]{3,16}$/
+    return minecraftUsernameRegex.test(username)
+}
+
+/**
+ * Generates a deterministic UUID v3 from a username.
+ * Uses a fixed namespace UUID to ensure consistency.
+ * 
+ * @param {string} username The username to generate UUID from.
+ * @returns {string} The generated UUID in standard format.
+ */
+function generateOfflineUUID(username) {
+    // Namespace UUID for OfflinePlayer (Minecraft standard)
+    const namespace = 'OfflinePlayer:' + username
+    const hash = crypto.createHash('md5').update(namespace).digest()
+    
+    // Set version to 3 (MD5 hash based)
+    hash[6] = (hash[6] & 0x0f) | 0x30
+    hash[8] = (hash[8] & 0x3f) | 0x80
+    
+    // Format as UUID string
+    const uuid = hash.toString('hex')
+    return `${uuid.substring(0, 8)}-${uuid.substring(8, 12)}-${uuid.substring(12, 16)}-${uuid.substring(16, 20)}-${uuid.substring(20, 32)}`
+}
+
+/**
+ * Add an offline account. This will create a local offline account without any online validation.
+ * The account can be used to play on cracked/offline servers.
+ * 
+ * @param {string} username The username for the offline account (3-16 chars, alphanumeric + underscore).
+ * @returns {Promise.<Object>} Promise which resolves the created offline account object.
+ */
+exports.addOfflineAccount = async function(username) {
+    try {
+        // Validate username format
+        if (!validateOfflineUsername(username)) {
+            return Promise.reject({
+                title: Lang.queryJS('auth.offline.error.invalidUsernameTitle') || 'Invalid Username',
+                desc: Lang.queryJS('auth.offline.error.invalidUsernameDesc') || 'Username must be 3-16 characters (letters, numbers, and underscores only).'
+            })
+        }
+
+        // Generate deterministic UUID
+        const uuid = generateOfflineUUID(username)
+
+        // Check if account already exists
+        const existingAccount = ConfigManager.getAuthAccount(uuid)
+        if (existingAccount) {
+            return Promise.reject({
+                title: Lang.queryJS('auth.offline.error.accountExistsTitle') || 'Account Already Exists',
+                desc: Lang.queryJS('auth.offline.error.accountExistsDesc') || 'An offline account with this username already exists.'
+            })
+        }
+
+        // Add offline account to config
+        const ret = ConfigManager.addOfflineAccount(uuid, username)
+        ConfigManager.save()
+
+        log.info(`Offline account created: ${username} (${uuid})`)
+        return ret
+
+    } catch (err) {
+        log.error('Error while adding offline account:', err)
+        return Promise.reject({
+            title: Lang.queryJS('auth.offline.error.unknownTitle') || 'Unknown Error',
+            desc: Lang.queryJS('auth.offline.error.unknownDesc') || 'An unknown error occurred while creating the offline account.'
+        })
+    }
+}
+
+/**
+ * Remove an offline account from the configuration.
+ * 
+ * @param {string} uuid The UUID of the offline account to be removed.
+ * @returns {Promise.<void>} Promise which resolves to void when the action is complete.
+ */
+exports.removeOfflineAccount = async function(uuid) {
+    try {
+        ConfigManager.removeAuthAccount(uuid)
+        ConfigManager.save()
+        log.info(`Offline account removed: ${uuid}`)
+        return Promise.resolve()
+    } catch (err) {
+        log.error('Error while removing offline account:', err)
+        return Promise.reject(err)
+    }
+}
+
+/**
+ * Validate an offline account. Offline accounts are always valid as they don't require online validation.
+ * 
+ * @param {Object} account The offline account to validate.
+ * @returns {Promise.<boolean>} Promise which always resolves to true for offline accounts.
+ */
+exports.validateOfflineAccount = async function(account) {
+    // Offline accounts don't need validation
+    log.info(`Offline account validated: ${account.displayName}`)
+    return Promise.resolve(true)
+}
+
+/**
+ * Update an offline account's UUID (advanced feature).
+ * Allows manual override of the auto-generated UUID.
+ * 
+ * @param {string} currentUuid The current UUID of the account.
+ * @param {string} newUuid The new UUID to set (must be valid UUID format).
+ * @returns {Promise.<Object>} Promise which resolves the updated account object.
+ */
+exports.updateOfflineAccountUUID = async function(currentUuid, newUuid) {
+    try {
+        // Validate UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        if (!uuidRegex.test(newUuid)) {
+            return Promise.reject({
+                title: 'Invalid UUID Format',
+                desc: 'The provided UUID is not in a valid format.'
+            })
+        }
+
+        // Get current account
+        const account = ConfigManager.getAuthAccount(currentUuid)
+        if (!account || account.type !== 'offline') {
+            return Promise.reject({
+                title: 'Account Not Found',
+                desc: 'The specified offline account does not exist.'
+            })
+        }
+
+        // Check if new UUID already exists
+        const existingAccount = ConfigManager.getAuthAccount(newUuid)
+        if (existingAccount && existingAccount.uuid !== currentUuid) {
+            return Promise.reject({
+                title: 'UUID Already Exists',
+                desc: 'Another account is already using this UUID.'
+            })
+        }
+
+        // Remove old account and add with new UUID
+        ConfigManager.removeAuthAccount(currentUuid)
+        const ret = ConfigManager.addOfflineAccount(newUuid, account.username, account.displayName)
+        
+        // If this was the selected account, update selection
+        if (ConfigManager.getSelectedAccount()?.uuid === currentUuid) {
+            ConfigManager.setSelectedAccount(newUuid)
+        }
+        
+        ConfigManager.save()
+        log.info(`Offline account UUID updated: ${currentUuid} -> ${newUuid}`)
+        return ret
+
+    } catch (err) {
+        log.error('Error while updating offline account UUID:', err)
+        return Promise.reject({
+            title: 'Update Failed',
+            desc: 'Failed to update the offline account UUID.'
+        })
+    }
 }

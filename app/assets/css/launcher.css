@@ -485,7 +485,8 @@ body, button {
 }
 
 /* Logo on login form. */
-#loginImageSeal {
+#loginImageSeal,
+#loginOfflineImageSeal {
     border-radius: 50%;
     border: 2px solid #cad7e1;
     background: rgba(1, 2, 1, 0.5);
@@ -496,7 +497,8 @@ body, button {
 }
 
 /* Header on login view. */
-#loginSubheader {
+#loginSubheader,
+#loginOfflineSubheader {
     font-family: 'Avenir Medium';
     margin-bottom: 25px;
     font-size: 12px;
@@ -790,6 +792,114 @@ body, button {
     color: #848484;
     font-weight: bold;
     text-align: center;
+}
+
+/* * *
+* Login View | Offline Login Styles
+* * */
+
+/* Offline login container */
+#loginOfflineContent {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+/* Offline login form */
+#loginOfflineForm {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 400px;
+}
+
+/* Center and size the offline logo */
+#loginOfflineImageSeal {
+    display: block;
+    margin: 0 auto 20px;
+}
+
+/* Offline subheader */
+#loginOfflineSubheader {
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    color: #fff;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+/* Offline profile SVG */
+#offlineProfileSVG {
+    fill: #fff;
+}
+
+/* Offline login button */
+#loginOfflineButton {
+    background: none;
+    font-weight: bold;
+    letter-spacing: 2px;
+    border: none;
+    padding: 15px 5px;
+    margin: 10px 0px;
+    cursor: pointer;
+    position: relative;
+    transition: 0.5s ease;
+    width: 100%;
+    color: #fff;
+}
+
+#loginOfflineButton:disabled {
+    color: rgba(255, 255, 255, 0.75);
+    pointer-events: none;
+}
+
+#loginOfflineButton[loading] {
+    color: #fff;
+}
+
+#loginOfflineButton:hover,
+#loginOfflineButton:focus {
+    text-shadow: 0px 0px 20px #fff;
+    outline: none;
+}
+
+#loginOfflineButton:active {
+    color: #c7c7c7;
+    text-shadow: 0px 0px 20px #c7c7c7;
+}
+
+#loginOfflineButtonContent {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#loginOfflineButton .circle-loader,
+#loginOfflineButton[loading] #loginOfflineSVG {
+    display: none;
+}
+
+#loginOfflineButton[loading] .circle-loader {
+    display: initial;
+}
+
+/* Offline info section */
+#loginOfflineInfo {
+    width: 100%;
+    margin: 10px 0;
+}
+
+/* Offline disclaimer */
+#loginOfflineDisclaimer {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    margin-top: 10px;
 }
 
 /* * *
@@ -1658,6 +1768,33 @@ input:checked + .toggleSwitchSlider:before {
 }
 .settingsAuthAccount:hover .settingsAuthAccountLogOut {
     opacity: 1;
+}
+
+/* Account type badges. */
+.settingsAuthAccountBadge {
+    display: inline-block;
+    font-size: 10px;
+    font-family: 'Avenir Medium';
+    padding: 2px 8px;
+    border-radius: 3px;
+    margin-left: 8px;
+    font-weight: bold;
+    vertical-align: middle;
+}
+
+.badgeMicrosoft {
+    background: linear-gradient(135deg, #f35325 0%, #81bc06 25%, #05a6f0 50%, #ffba08 100%);
+    color: white;
+}
+
+.badgeMojang {
+    background: #db2331;
+    color: white;
+}
+
+.badgeOffline {
+    background: #666;
+    color: #ddd;
 }
 
 /* * *
@@ -3653,24 +3790,36 @@ input:checked + .toggleSwitchSlider:before {
     min-height: 40%;
 }
 
-/* Scrollable div which lists the available servers. */
+/* Scrollable div which lists the available servers and installations. */
 #serverSelectListScrollable,
+#installationSelectListScrollable,
 #accountSelectListScrollable {
     padding: 0px 5px;
-    overflow-y: scroll;
+    overflow-y: auto;
+    max-height: 400px; /* Limitar altura máxima para mostrar scroll */
 }
 #serverSelectListScrollable::-webkit-scrollbar,
+#installationSelectListScrollable::-webkit-scrollbar,
 #accountSelectListScrollable::-webkit-scrollbar {
-    width: 2px;
+    width: 6px;
 }
 #serverSelectListScrollable::-webkit-scrollbar-track,
+#installationSelectListScrollable::-webkit-scrollbar-track,
 #accountSelectListScrollable::-webkit-scrollbar-track {
-    display: none;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
 }
 #serverSelectListScrollable::-webkit-scrollbar-thumb,
+#installationSelectListScrollable::-webkit-scrollbar-thumb,
 #accountSelectListScrollable::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
     border-radius: 10px;
     box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.50);
+}
+#serverSelectListScrollable::-webkit-scrollbar-thumb:hover,
+#installationSelectListScrollable::-webkit-scrollbar-thumb:hover,
+#accountSelectListScrollable::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
 }
 
 /* Content container for a server listing. */
@@ -3965,4 +4114,107 @@ input:checked + .toggleSwitchSlider:before {
 /* Class which is applied when the spinner image is spinning. */
 .rotating {
     animation: rotating 10s linear infinite;
+}
+
+/*******************************************************************************
+ *                                                                             *
+ * Installation Editor Styles                                                  *
+ *                                                                             *
+ ******************************************************************************/
+
+#installationEditorContent {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 30px 40px;
+    height: 75%;
+    overflow-y: auto;
+}
+
+.installationEditorFormGroup {
+    margin-bottom: 20px;
+}
+
+.installationEditorFormGroup label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    opacity: 0.9;
+}
+
+.installationEditorFormGroup input,
+.installationEditorFormGroup select {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    font-family: 'Avenir Book';
+}
+
+.installationEditorFormGroup input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.installationEditorFormGroup input:focus,
+.installationEditorFormGroup select:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.installationEditorFormGroup select option {
+    background: #2c3e50;
+    color: #fff;
+}
+
+.installationEditorLoaderBtn {
+    flex: 1;
+    min-width: 80px;
+    padding: 12px 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: 'Avenir Book';
+}
+
+.installationEditorLoaderBtn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: translateY(-2px);
+}
+
+.installationEditorLoaderBtn.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+#installationEditorCreate:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+#installationEditorErrorMessage {
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }

@@ -1,46 +1,104 @@
 /**
  * Script for landing.ejs
+ * Updated: 2025-12-08
  */
-// Requirements
-const { URL }                 = require('url')
-const {
-    MojangRestAPI,
-    getServerStatus
-}                             = require('helios-core/mojang')
-const {
-    RestResponseStatus,
-    isDisplayableError,
-    validateLocalFile
-}                             = require('helios-core/common')
-const {
-    FullRepair,
-    DistributionIndexProcessor,
-    MojangIndexProcessor,
-    downloadFile
-}                             = require('helios-core/dl')
-const {
-    validateSelectedJvm,
-    ensureJavaDirIsRoot,
-    javaExecFromRoot,
-    discoverBestJvmInstallation,
-    latestOpenJDK,
-    extractJdk
-}                             = require('helios-core/java')
 
-// Internal Requirements
-const DiscordWrapper          = require('./assets/js/discordwrapper')
-const ProcessBuilder          = require('./assets/js/processbuilder')
+/**
+ * Landing.js - Main landing page script
+ * This script loads AFTER uicore.js and uibinder.js
+ * Uses IIFE to avoid polluting global scope and conflicting with other scripts
+ */
 
-// Launch Elements
-const launch_content          = document.getElementById('launch_content')
-const launch_details          = document.getElementById('launch_details')
-const launch_progress         = document.getElementById('launch_progress')
-const launch_progress_label   = document.getElementById('launch_progress_label')
-const launch_details_text     = document.getElementById('launch_details_text')
-const server_selection_button = document.getElementById('server_selection_button')
-const user_text               = document.getElementById('user_text')
+// Wrap everything in an IIFE to avoid global variable conflicts
+(function() {
+    'use strict'
+    
+    // Prevent double execution
+    if (window.__LANDING_JS_LOADED__) {
+        console.warn('[LANDING] Script already loaded, skipping.')
+        return
+    }
+    window.__LANDING_JS_LOADED__ = true
+    console.log('[LANDING] Initializing...')
 
-const loggerLanding = LoggerUtil.getLogger('Landing')
+    // Load modules (scoped to this IIFE, won't conflict with uicore.js)
+    const { URL } = require('url')
+    const path = require('path')
+    const mojang = require('helios-core/mojang')
+    const common = require('helios-core/common')
+    const dl = require('helios-core/dl')
+    const java = require('helios-core/java')
+    const { LoggerUtil } = require('helios-core')
+    
+    const MojangRestAPI = mojang.MojangRestAPI
+    const getServerStatus = mojang.getServerStatus
+    const RestResponseStatus = common.RestResponseStatus
+    const isDisplayableError = common.isDisplayableError
+    const validateLocalFile = common.validateLocalFile
+    const FullRepair = dl.FullRepair
+    const DistributionIndexProcessor = dl.DistributionIndexProcessor
+    const MojangIndexProcessor = dl.MojangIndexProcessor
+    const downloadFile = dl.downloadFile
+    const downloadQueue = dl.downloadQueue
+    const validateSelectedJvmLanding = java.validateSelectedJvm
+    const ensureJavaDirIsRootLanding = java.ensureJavaDirIsRoot
+    const javaExecFromRoot = java.javaExecFromRoot
+    const discoverBestJvmInstallation = java.discoverBestJvmInstallation
+    const latestOpenJDK = java.latestOpenJDK
+    const extractJdk = java.extractJdk
+    
+    // Internal Requirements
+    const DiscordWrapper = require('./assets/js/discordwrapper')
+    const ProcessBuilder = require('./assets/js/processbuilder')
+    const JavaManager = require('./assets/js/javamanager')
+    
+    // ConfigManager e InstallationManager ya están disponibles globalmente
+    // const ConfigManager = require('./assets/js/configmanager')
+    // const InstallationManager = require('./assets/js/installationmanager')
+    
+    // Launch Elements
+    const launch_content = document.getElementById('launch_content')
+    const launch_details = document.getElementById('launch_details')
+    const launch_progress = document.getElementById('launch_progress')
+    const launch_progress_label = document.getElementById('launch_progress_label')
+    const launch_details_text = document.getElementById('launch_details_text')
+    const server_selection_button = document.getElementById('server_selection_button')
+    const user_text = document.getElementById('user_text')
+    
+    const loggerLanding = LoggerUtil.getLogger('Landing')
+
+/**
+ * Crear un mock de objeto Server compatible con DistroAPI
+ * para instalaciones personalizadas
+ */
+function createServerMock(virtualServer) {
+    return {
+        rawServer: virtualServer,
+        
+        // Propiedades directas (ProcessBuilder las accede directamente)
+        modules: virtualServer.modules || [],
+        
+        // Métodos compatibles con DistroAPI Server
+        getID: () => virtualServer.id,
+        getName: () => virtualServer.name,
+        getDescription: () => virtualServer.description,
+        getIcon: () => virtualServer.icon,
+        getVersion: () => virtualServer.version,
+        getAddress: () => virtualServer.address,
+        getMinecraftVersion: () => virtualServer.minecraftVersion,
+        getDiscord: () => virtualServer.discord,
+        isMainServer: () => virtualServer.mainServer || false,
+        isAutoConnect: () => virtualServer.autoconnect || false,
+        getModules: () => virtualServer.modules || [],
+        
+        // Propiedades de Java
+        effectiveJavaOptions: virtualServer.javaOptions || {
+            supported: '>=8.x',
+            suggestedMajor: 8,
+            distribution: 'ADOPTIUM'
+        }
+    }
+}
 
 /* Launch Progress Wrapper Functions */
 
@@ -102,24 +160,92 @@ function setLaunchEnabled(val){
 document.getElementById('launch_button').addEventListener('click', async e => {
     loggerLanding.info('Launching game..')
     try {
-        const server = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
-        const jExe = ConfigManager.getJavaExecutable(ConfigManager.getSelectedServer())
-        if(jExe == null){
-            await asyncSystemScan(server.effectiveJavaOptions)
+        const selectedInstallId = ConfigManager.getSelectedInstallation()
+        let server
+        let serverId
+        
+        // Verificar si hay una instalación personalizada seleccionada
+        if(selectedInstallId) {
+            const installation = ConfigManager.getInstallation(selectedInstallId)
+            
+            if(!installation) {
+                loggerLanding.error(`Instalación seleccionada no encontrada: ${selectedInstallId}`)
+                showLaunchFailure(
+                    Lang.queryJS('landing.launch.failureTitle'),
+                    'La instalación seleccionada no existe. Por favor, selecciona otra instalación.'
+                )
+                return
+            }
+            
+            // Validar instalación
+            const validation = InstallationManager.validateInstallation(installation)
+            if(!validation.valid) {
+                loggerLanding.error('Instalación inválida:', validation.errors)
+                showLaunchFailure(
+                    Lang.queryJS('landing.launch.failureTitle'),
+                    `Instalación inválida: ${validation.errors.join(', ')}`
+                )
+                return
+            }
+            
+            // Convertir instalación a servidor virtual
+            const virtualServer = InstallationManager.installationToServer(installation)
+            server = { rawServer: virtualServer, effectiveJavaOptions: virtualServer.javaOptions || {} }
+            serverId = installation.id
+            
+            loggerLanding.info(`Lanzando instalación personalizada: ${installation.name}`)
         } else {
-
+            // Usar servidor TECNILAND tradicional
+            serverId = ConfigManager.getSelectedServer()
+            server = (await DistroAPI.getDistribution()).getServerById(serverId)
+            
+            if(!server) {
+                loggerLanding.error('No hay servidor o instalación seleccionada')
+                showLaunchFailure(
+                    Lang.queryJS('landing.launch.failureTitle'),
+                    'No has seleccionado ninguna instalación o servidor.'
+                )
+                return
+            }
+        }
+        
+        // Obtener versión de Minecraft para JavaManager
+        const minecraftVersion = server.rawServer.minecraftVersion
+        loggerLanding.info(`Minecraft version: ${minecraftVersion}`)
+        
+        // Usar JavaManager para resolver el Java correcto
+        const configuredJava = ConfigManager.getJavaExecutable(serverId)
+        const javaResult = await JavaManager.resolveJavaForMinecraft(minecraftVersion, configuredJava)
+        
+        loggerLanding.info('Java resolution result:', javaResult)
+        
+        if (!javaResult.success) {
+            // No hay Java compatible, necesitamos descargar
+            loggerLanding.warn(`No compatible Java found: ${javaResult.message}`)
+            
+            // Si el usuario tenía Java configurado pero es incompatible, mostrar mensaje especial
+            if (javaResult.configuredJavaIncompatible) {
+                await showJavaIncompatibleOverlay(minecraftVersion, javaResult, serverId)
+            } else {
+                // No hay Java, ofrecer descarga automática
+                const effectiveJavaOptions = JavaManager.generateEffectiveJavaOptions(minecraftVersion)
+                await asyncSystemScanWithJavaManager(effectiveJavaOptions, true, serverId, minecraftVersion)
+            }
+        } else {
+            // Java encontrado, verificar y actualizar ConfigManager si es necesario
+            if (javaResult.source === 'detected') {
+                // Java auto-detectado, guardarlo en ConfigManager para futuras ejecuciones
+                loggerLanding.info(`Saving auto-detected Java to ConfigManager: ${javaResult.executable}`)
+                ConfigManager.setJavaExecutable(serverId, javaResult.executable)
+                ConfigManager.save()
+            }
+            
             setLaunchDetails(Lang.queryJS('landing.launch.pleaseWait'))
             toggleLaunchArea(true)
             setLaunchPercentage(0, 100)
-
-            const details = await validateSelectedJvm(ensureJavaDirIsRoot(jExe), server.effectiveJavaOptions.supported)
-            if(details != null){
-                loggerLanding.info('Jvm Details', details)
-                await dlAsync()
-
-            } else {
-                await asyncSystemScan(server.effectiveJavaOptions)
-            }
+            
+            loggerLanding.info(`Using Java ${javaResult.majorVersion} from ${javaResult.source}: ${javaResult.executable}`)
+            await dlAsync()
         }
     } catch(err) {
         loggerLanding.error('Unhandled error in during launch process.', err)
@@ -147,9 +273,15 @@ function updateSelectedAccount(authUser){
     if(authUser != null){
         if(authUser.displayName != null){
             username = authUser.displayName
+            // Add offline mode indicator if account is offline
+            if(authUser.type === 'offline'){
+                username += ' <span style="font-size: 10px; color: #888; font-weight: normal;">(Offline Mode)</span>'
+            }
         }
         if(authUser.uuid != null){
-            document.getElementById('avatarContainer').style.backgroundImage = `url('https://mc-heads.net/body/${authUser.uuid}/right')`
+            // Use avatar for offline accounts, body for premium accounts
+            const imageType = authUser.type === 'offline' ? 'avatar' : 'body'
+            document.getElementById('avatarContainer').style.backgroundImage = `url('https://mc-heads.net/${imageType}/${authUser.uuid}/right')`
         }
     }
     user_text.innerHTML = username
@@ -193,8 +325,8 @@ const refreshMojangStatuses = async function(){
         statuses = MojangRestAPI.getDefaultStatuses()
     }
     
-    greenCount = 0
-    greyCount = 0
+    let greenCount = 0
+    let greyCount = 0
 
     for(let i=0; i<statuses.length; i++){
         const service = statuses[i]
@@ -237,18 +369,27 @@ const refreshMojangStatuses = async function(){
 
 const refreshServerStatus = async (fade = false) => {
     loggerLanding.info('Refreshing Server Status')
+    
+    // Para instalaciones personalizadas, no hay servidor en la distribución
+    const selectedInstallId = ConfigManager.getSelectedInstallation()
+    if(selectedInstallId) {
+        // Instalación personalizada - no mostrar estado de servidor
+        loggerLanding.info('Instalación personalizada seleccionada - no hay servidor para consultar estado')
+        return
+    }
+    
     const serv = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
 
     let pLabel = Lang.queryJS('landing.serverStatus.server')
     let pVal = Lang.queryJS('landing.serverStatus.offline')
 
     try {
-
-        const servStat = await getServerStatus(47, serv.hostname, serv.port)
-        console.log(servStat)
-        pLabel = Lang.queryJS('landing.serverStatus.players')
-        pVal = servStat.players.online + '/' + servStat.players.max
-
+        if(serv && serv.hostname) {
+            const servStat = await getServerStatus(47, serv.hostname, serv.port)
+            console.log(servStat)
+            pLabel = Lang.queryJS('landing.serverStatus.players')
+            pVal = servStat.players.online + '/' + servStat.players.max
+        }
     } catch (err) {
         loggerLanding.warn('Unable to refresh server status, assuming offline.')
         loggerLanding.debug(err)
@@ -294,11 +435,248 @@ function showLaunchFailure(title, desc){
 /* System (Java) Scan */
 
 /**
+ * Show overlay when user's configured Java is incompatible with Minecraft version
+ * @param {string} mcVersion - Minecraft version
+ * @param {Object} javaResult - Result from JavaManager.resolveJavaForMinecraft
+ * @param {string} serverId - Server/installation ID
+ */
+async function showJavaIncompatibleOverlay(mcVersion, javaResult, serverId) {
+    const req = javaResult.requirements
+    
+    setOverlayContent(
+        Lang.queryJS('landing.javaManager.incompatibleTitle'),
+        Lang.queryJS('landing.javaManager.incompatibleMessage', { 
+            mcVersion: mcVersion,
+            required: req.recommended,
+            minVersion: req.min,
+            maxVersion: req.max
+        }),
+        Lang.queryJS('landing.javaManager.downloadCompatible', { major: req.recommended }),
+        Lang.queryJS('landing.javaManager.cancel')
+    )
+    
+    setOverlayHandler(async () => {
+        // Usuario acepta descargar Java compatible
+        toggleOverlay(false)
+        const effectiveJavaOptions = JavaManager.generateEffectiveJavaOptions(mcVersion)
+        await asyncSystemScanWithJavaManager(effectiveJavaOptions, true, serverId, mcVersion)
+    })
+    
+    setDismissHandler(() => {
+        toggleOverlay(false)
+        toggleLaunchArea(false)
+    })
+    
+    toggleOverlay(true, true)
+}
+
+/**
+ * System scan with JavaManager integration - detects and downloads correct Java version
+ * @param {Object} effectiveJavaOptions - Java options for helios-core compatibility
+ * @param {boolean} launchAfter - Whether to launch after Java is ready
+ * @param {string} serverId - Server/installation ID
+ * @param {string} mcVersion - Minecraft version for proper Java selection
+ */
+async function asyncSystemScanWithJavaManager(effectiveJavaOptions, launchAfter = true, serverId = null, mcVersion = null) {
+    // Si no se proporciona serverId, usar el servidor o instalación seleccionada
+    if (!serverId) {
+        serverId = ConfigManager.getSelectedInstallation() || ConfigManager.getSelectedServer()
+    }
+    
+    setLaunchDetails(Lang.queryJS('landing.systemScan.checking'))
+    toggleLaunchArea(true)
+    setLaunchPercentage(0, 100)
+    
+    // Primero, intentar detectar Java con JavaManager
+    if (mcVersion) {
+        const javaResult = await JavaManager.resolveJavaForMinecraft(mcVersion, null)
+        
+        if (javaResult.success) {
+            // Java encontrado, guardarlo y continuar
+            loggerLanding.info(`JavaManager found compatible Java: ${javaResult.executable}`)
+            ConfigManager.setJavaExecutable(serverId, javaResult.executable)
+            ConfigManager.save()
+            
+            // Update settings UI if open
+            if (typeof settingsJavaExecVal !== 'undefined') {
+                settingsJavaExecVal.value = javaResult.executable
+                if (typeof populateJavaExecDetails === 'function') {
+                    await populateJavaExecDetails(javaResult.executable)
+                }
+            }
+            
+            if (launchAfter) {
+                await dlAsync()
+            }
+            return
+        }
+    }
+    
+    // Fallback: usar helios-core discovery (para mantener compatibilidad)
+    const jvmDetails = await discoverBestJvmInstallation(
+        ConfigManager.getDataDirectory(),
+        effectiveJavaOptions.supported
+    )
+    
+    if (jvmDetails == null) {
+        // No se encontró Java compatible, ofrecer descarga
+        loggerLanding.info(`No compatible Java found, offering download of Java ${effectiveJavaOptions.suggestedMajor}`)
+        
+        setOverlayContent(
+            Lang.queryJS('landing.systemScan.noCompatibleJava'),
+            Lang.queryJS('landing.javaManager.noJavaFound', { 
+                major: effectiveJavaOptions.suggestedMajor,
+                mcVersion: mcVersion || 'desconocida'
+            }),
+            Lang.queryJS('landing.systemScan.installJava'),
+            Lang.queryJS('landing.systemScan.installJavaManually')
+        )
+        
+        setOverlayHandler(async () => {
+            setLaunchDetails(Lang.queryJS('landing.systemScan.javaDownloadPrepare'))
+            toggleOverlay(false)
+            
+            try {
+                await downloadJavaWithCallback(effectiveJavaOptions, launchAfter, serverId, mcVersion)
+            } catch (err) {
+                loggerLanding.error('Unhandled error in Java Download', err)
+                showLaunchFailure(
+                    Lang.queryJS('landing.systemScan.javaDownloadFailureTitle'),
+                    Lang.queryJS('landing.systemScan.javaDownloadFailureText')
+                )
+            }
+        })
+        
+        setDismissHandler(() => {
+            $('#overlayContent').fadeOut(250, () => {
+                setOverlayContent(
+                    Lang.queryJS('landing.systemScan.javaRequired', { 'major': effectiveJavaOptions.suggestedMajor }),
+                    Lang.queryJS('landing.systemScan.javaRequiredMessage', { 'major': effectiveJavaOptions.suggestedMajor }),
+                    Lang.queryJS('landing.systemScan.javaRequiredDismiss'),
+                    Lang.queryJS('landing.systemScan.javaRequiredCancel')
+                )
+                setOverlayHandler(() => {
+                    toggleLaunchArea(false)
+                    toggleOverlay(false)
+                })
+                setDismissHandler(() => {
+                    toggleOverlay(false, true)
+                    asyncSystemScanWithJavaManager(effectiveJavaOptions, launchAfter, serverId, mcVersion)
+                })
+                $('#overlayContent').fadeIn(250)
+            })
+        })
+        toggleOverlay(true, true)
+    } else {
+        // Java encontrado via helios-core
+        const javaExec = javaExecFromRoot(jvmDetails.path)
+        loggerLanding.info(`helios-core found Java at: ${javaExec}`)
+        ConfigManager.setJavaExecutable(serverId, javaExec)
+        ConfigManager.save()
+        
+        // Update settings UI if open
+        if (typeof settingsJavaExecVal !== 'undefined') {
+            settingsJavaExecVal.value = javaExec
+            if (typeof populateJavaExecDetails === 'function') {
+                await populateJavaExecDetails(javaExec)
+            }
+        }
+        
+        if (launchAfter) {
+            await dlAsync()
+        }
+    }
+}
+
+/**
+ * Download Java with proper callback for auto-launch after download
+ */
+async function downloadJavaWithCallback(effectiveJavaOptions, launchAfter = true, serverId = null, mcVersion = null) {
+    const asset = await latestOpenJDK(
+        effectiveJavaOptions.suggestedMajor,
+        ConfigManager.getDataDirectory(),
+        effectiveJavaOptions.distribution
+    )
+    
+    if (asset == null) {
+        throw new Error(Lang.queryJS('landing.downloadJava.findJdkFailure'))
+    }
+    
+    loggerLanding.info(`Downloading Java ${effectiveJavaOptions.suggestedMajor} from ${asset.url}`)
+    
+    let received = 0
+    await downloadFile(asset.url, asset.path, ({ transferred }) => {
+        received = transferred
+        setDownloadPercentage(Math.trunc((transferred / asset.size) * 100))
+    })
+    setDownloadPercentage(100)
+    
+    if (received != asset.size) {
+        loggerLanding.warn(`Java Download: Expected ${asset.size} bytes but received ${received}`)
+        if (!await validateLocalFile(asset.path, asset.algo, asset.hash)) {
+            loggerLanding.error(`Hashes do not match, ${asset.id} may be corrupted.`)
+            throw new Error(Lang.queryJS('landing.downloadJava.javaDownloadCorruptedError'))
+        }
+    }
+    
+    // Extract
+    remote.getCurrentWindow().setProgressBar(2)
+    
+    const eLStr = Lang.queryJS('landing.downloadJava.extractingJava')
+    let dotStr = ''
+    setLaunchDetails(eLStr)
+    const extractListener = setInterval(() => {
+        if (dotStr.length >= 3) {
+            dotStr = ''
+        } else {
+            dotStr += '.'
+        }
+        setLaunchDetails(eLStr + dotStr)
+    }, 750)
+    
+    const newJavaExec = await extractJdk(asset.path)
+    
+    remote.getCurrentWindow().setProgressBar(-1)
+    clearInterval(extractListener)
+    
+    // Save to ConfigManager
+    if (!serverId) {
+        serverId = ConfigManager.getSelectedInstallation() || ConfigManager.getSelectedServer()
+    }
+    ConfigManager.setJavaExecutable(serverId, newJavaExec)
+    ConfigManager.save()
+    
+    // Invalidate JavaManager cache so it detects the new installation
+    JavaManager.invalidateCache()
+    
+    loggerLanding.info(`Java ${effectiveJavaOptions.suggestedMajor} installed at: ${newJavaExec}`)
+    setLaunchDetails(Lang.queryJS('landing.downloadJava.javaInstalled'))
+    
+    // Update settings UI if open
+    if (typeof settingsJavaExecVal !== 'undefined') {
+        settingsJavaExecVal.value = newJavaExec
+        if (typeof populateJavaExecDetails === 'function') {
+            await populateJavaExecDetails(newJavaExec)
+        }
+    }
+    
+    // Auto-launch after download
+    if (launchAfter) {
+        await dlAsync()
+    }
+}
+
+/**
  * Asynchronously scan the system for valid Java installations.
  * 
  * @param {boolean} launchAfter Whether we should begin to launch after scanning. 
  */
-async function asyncSystemScan(effectiveJavaOptions, launchAfter = true){
+async function asyncSystemScan(effectiveJavaOptions, launchAfter = true, serverId = null){
+
+    // Si no se proporciona serverId, usar el servidor o instalación seleccionada
+    if(!serverId) {
+        serverId = ConfigManager.getSelectedInstallation() || ConfigManager.getSelectedServer()
+    }
 
     setLaunchDetails(Lang.queryJS('landing.systemScan.checking'))
     toggleLaunchArea(true)
@@ -345,7 +723,7 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true){
                 setDismissHandler(() => {
                     toggleOverlay(false, true)
 
-                    asyncSystemScan(effectiveJavaOptions, launchAfter)
+                    asyncSystemScan(effectiveJavaOptions, launchAfter, serverId)
                 })
                 $('#overlayContent').fadeIn(250)
             })
@@ -354,7 +732,7 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true){
     } else {
         // Java installation found, use this to launch the game.
         const javaExec = javaExecFromRoot(jvmDetails.path)
-        ConfigManager.setJavaExecutable(ConfigManager.getSelectedServer(), javaExec)
+        ConfigManager.setJavaExecutable(serverId, javaExec)
         ConfigManager.save()
 
         // We need to make sure that the updated value is on the settings UI.
@@ -465,7 +843,58 @@ async function dlAsync(login = true) {
         return
     }
 
-    const serv = distro.getServerById(ConfigManager.getSelectedServer())
+    let serv
+    let serverId
+    const selectedInstallId = ConfigManager.getSelectedInstallation()
+    
+    // Verificar si hay una instalación personalizada seleccionada
+    if(selectedInstallId) {
+        const installation = ConfigManager.getInstallation(selectedInstallId)
+        
+        if(!installation) {
+            loggerLaunchSuite.error(`Instalación seleccionada no encontrada: ${selectedInstallId}`)
+            showLaunchFailure(
+                Lang.queryJS('landing.dlAsync.fatalError'),
+                'La instalación seleccionada no existe. Por favor, selecciona otra instalación.'
+            )
+            return
+        }
+        
+        // Validar instalación
+        const validation = InstallationManager.validateInstallation(installation)
+        if(!validation.valid) {
+            loggerLaunchSuite.error('Instalación inválida:', validation.errors)
+            showLaunchFailure(
+                Lang.queryJS('landing.dlAsync.fatalError'),
+                `Instalación inválida: ${validation.errors.join(', ')}. Por favor, crea una nueva instalación.`
+            )
+            return
+        }
+        
+        // Convertir instalación a servidor virtual
+        const virtualServer = InstallationManager.installationToServer(installation)
+        
+        // Crear un mock del objeto Server que simula la interfaz de DistroAPI
+        serv = createServerMock(virtualServer)
+        serverId = installation.id
+        
+        loggerLaunchSuite.info(`Lanzando instalación personalizada: ${installation.name}`)
+        loggerLaunchSuite.info(`  Loader: ${installation.loader.type} ${installation.loader.loaderVersion || ''}`)
+        loggerLaunchSuite.info(`  Minecraft: ${installation.loader.minecraftVersion}`)
+    } else {
+        // Usar servidor TECNILAND tradicional
+        serverId = ConfigManager.getSelectedServer()
+        serv = distro.getServerById(serverId)
+        
+        if(!serv) {
+            loggerLaunchSuite.error('No hay servidor o instalación seleccionada')
+            showLaunchFailure(
+                Lang.queryJS('landing.dlAsync.fatalError'),
+                'No has seleccionado ninguna instalación o servidor. Por favor, selecciona uno antes de lanzar.'
+            )
+            return
+        }
+    }
 
     if(login) {
         if(ConfigManager.getSelectedAccount() == null){
@@ -478,78 +907,218 @@ async function dlAsync(login = true) {
     toggleLaunchArea(true)
     setLaunchPercentage(0, 100)
 
-    const fullRepairModule = new FullRepair(
-        ConfigManager.getCommonDirectory(),
-        ConfigManager.getInstanceDirectory(),
-        ConfigManager.getLauncherDirectory(),
-        ConfigManager.getSelectedServer(),
-        DistroAPI.isDevMode()
-    )
+    let fullRepairModule
+    let mojangIndexProcessor = null
 
-    fullRepairModule.spawnReceiver()
-
-    fullRepairModule.childProcess.on('error', (err) => {
-        loggerLaunchSuite.error('Error during launch', err)
-        showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringLaunchTitle'), err.message || Lang.queryJS('landing.dlAsync.errorDuringLaunchText'))
-    })
-    fullRepairModule.childProcess.on('close', (code, _signal) => {
-        if(code !== 0){
-            loggerLaunchSuite.error(`Full Repair Module exited with code ${code}, assuming error.`)
-            showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringLaunchTitle'), Lang.queryJS('landing.dlAsync.seeConsoleForDetails'))
-        }
-    })
-
-    loggerLaunchSuite.info('Validating files.')
-    setLaunchDetails(Lang.queryJS('landing.dlAsync.validatingFileIntegrity'))
-    let invalidFileCount = 0
-    try {
-        invalidFileCount = await fullRepairModule.verifyFiles(percent => {
-            setLaunchPercentage(percent)
-        })
-        setLaunchPercentage(100)
-    } catch (err) {
-        loggerLaunchSuite.error('Error during file validation.')
-        showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileVerificationTitle'), err.displayable || Lang.queryJS('landing.dlAsync.seeConsoleForDetails'))
-        return
-    }
-    
-
-    if(invalidFileCount > 0) {
-        loggerLaunchSuite.info('Downloading files.')
-        setLaunchDetails(Lang.queryJS('landing.dlAsync.downloadingFiles'))
-        setLaunchPercentage(0)
+    // Para instalaciones personalizadas, descargar solo archivos de Minecraft vanilla
+    if(selectedInstallId) {
+        loggerLaunchSuite.info('Instalación personalizada - descargando archivos de Minecraft vanilla con MojangIndexProcessor')
+        
+        // Inicializar MojangIndexProcessor (NO usar const aquí, ya está declarado arriba)
+        mojangIndexProcessor = new MojangIndexProcessor(
+            ConfigManager.getCommonDirectory(),
+            serv.rawServer.minecraftVersion
+        )
+        
         try {
-            await fullRepairModule.download(percent => {
-                setDownloadPercentage(percent)
+            // Inicializar processor (carga manifests)
+            setLaunchDetails('Cargando información de la versión...')
+            await mojangIndexProcessor.init()
+            
+            // Validar archivos
+            loggerLaunchSuite.info('Validando archivos de Minecraft.')
+            setLaunchDetails('Validando archivos de Minecraft...')
+            setLaunchPercentage(0, 100)
+            
+            let totalAssets = 0
+            const assetCategories = await mojangIndexProcessor.validate(async () => {
+                // Callback por cada stage completado
+                setLaunchPercentage(Math.min(100, (totalAssets / 4) * 100))
             })
-            setDownloadPercentage(100)
+            
+            // Contar total de assets faltantes
+            const allAssets = Object.values(assetCategories).flat()
+            totalAssets = allAssets.length
+            
+            if(totalAssets > 0) {
+                loggerLaunchSuite.info(`Descargando ${totalAssets} archivos de Minecraft.`)
+                setLaunchDetails(`Descargando archivos de Minecraft (${totalAssets} archivos)...`)
+                setLaunchPercentage(0, 100)
+                
+                let received = {}
+                await downloadQueue(allAssets, ({ id, transferred }) => {
+                    received[id] = transferred
+                    const totalReceived = Object.values(received).reduce((acc, val) => acc + val, 0)
+                    const totalSize = allAssets.reduce((acc, asset) => acc + asset.size, 0)
+                    setDownloadPercentage(Math.trunc((totalReceived / totalSize) * 100))
+                })
+                setDownloadPercentage(100)
+            } else {
+                loggerLaunchSuite.info('Todos los archivos de Minecraft están actualizados.')
+            }
+            
+            setLaunchPercentage(100, 100)
         } catch(err) {
-            loggerLaunchSuite.error('Error during file download.')
-            showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'), err.displayable || Lang.queryJS('landing.dlAsync.seeConsoleForDetails'))
+            loggerLaunchSuite.error('Error durante la descarga de archivos de Minecraft para instalación personalizada.')
+            showLaunchFailure('Error al descargar Minecraft', err.message || 'Ver consola para detalles')
             return
         }
+        
+        // Remove download bar
+        remote.getCurrentWindow().setProgressBar(-1)
     } else {
-        loggerLaunchSuite.info('No invalid files, skipping download.')
+        // Para servidores TECNILAND, usar FullRepair normal
+        fullRepairModule = new FullRepair(
+            ConfigManager.getCommonDirectory(),
+            ConfigManager.getInstanceDirectory(),
+            ConfigManager.getLauncherDirectory(),
+            serverId,
+            DistroAPI.isDevMode()
+        )
+
+        fullRepairModule.spawnReceiver()
+
+        fullRepairModule.childProcess.on('error', (err) => {
+            loggerLaunchSuite.error('Error during launch', err)
+            showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringLaunchTitle'), err.message || Lang.queryJS('landing.dlAsync.errorDuringLaunchText'))
+        })
+        fullRepairModule.childProcess.on('close', (code, _signal) => {
+            if(code !== 0){
+                loggerLaunchSuite.error(`Full Repair Module exited with code ${code}, assuming error.`)
+                showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringLaunchTitle'), Lang.queryJS('landing.dlAsync.seeConsoleForDetails'))
+            }
+        })
+
+        loggerLaunchSuite.info('Validating files.')
+        setLaunchDetails(Lang.queryJS('landing.dlAsync.validatingFileIntegrity'))
+        let invalidFileCount = 0
+        try {
+            invalidFileCount = await fullRepairModule.verifyFiles(percent => {
+                setLaunchPercentage(percent)
+            })
+            setLaunchPercentage(100)
+        } catch (err) {
+            loggerLaunchSuite.error('Error during file validation.')
+            showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileVerificationTitle'), err.displayable || Lang.queryJS('landing.dlAsync.seeConsoleForDetails'))
+            return
+        }
+        
+
+        if(invalidFileCount > 0) {
+            loggerLaunchSuite.info('Downloading files.')
+            setLaunchDetails(Lang.queryJS('landing.dlAsync.downloadingFiles'))
+            setLaunchPercentage(0)
+            try {
+                await fullRepairModule.download(percent => {
+                    setDownloadPercentage(percent)
+                })
+                setDownloadPercentage(100)
+            } catch(err) {
+                loggerLaunchSuite.error('Error during file download.')
+                showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'), err.displayable || Lang.queryJS('landing.dlAsync.seeConsoleForDetails'))
+                return
+            }
+        } else {
+            loggerLaunchSuite.info('No invalid files, skipping download.')
+        }
+
+        // Remove download bar.
+        remote.getCurrentWindow().setProgressBar(-1)
+
+        fullRepairModule.destroyReceiver()
     }
-
-    // Remove download bar.
-    remote.getCurrentWindow().setProgressBar(-1)
-
-    fullRepairModule.destroyReceiver()
+    // Cerrar el bloque else de FullRepair
 
     setLaunchDetails(Lang.queryJS('landing.dlAsync.preparingToLaunch'))
 
-    const mojangIndexProcessor = new MojangIndexProcessor(
-        ConfigManager.getCommonDirectory(),
-        serv.rawServer.minecraftVersion)
-    const distributionIndexProcessor = new DistributionIndexProcessor(
-        ConfigManager.getCommonDirectory(),
-        distro,
-        serv.rawServer.id
-    )
-
-    const modLoaderData = await distributionIndexProcessor.loadModLoaderVersionJson(serv)
+    // Crear mojangIndexProcessor si no existe (servidores tradicionales)
+    if(!mojangIndexProcessor) {
+        loggerLaunchSuite.info('Creando MojangIndexProcessor para servidor tradicional')
+        mojangIndexProcessor = new MojangIndexProcessor(
+            ConfigManager.getCommonDirectory(),
+            serv.rawServer.minecraftVersion)
+        await mojangIndexProcessor.init()
+    }
+    
+    loggerLaunchSuite.info('Obteniendo versionData de MojangIndexProcessor')
     const versionData = await mojangIndexProcessor.getVersionJson()
+    loggerLaunchSuite.info(`versionData obtenido: ${versionData.id}`)
+    
+    let modLoaderData = null
+    
+    // Para instalaciones personalizadas, NO usar DistributionIndexProcessor (no están en distribución)
+    if(!selectedInstallId) {
+        // Solo para servidores TECNILAND tradicionales
+        loggerLaunchSuite.info('Cargando modLoaderData para servidor TECNILAND')
+        const distributionIndexProcessor = new DistributionIndexProcessor(
+            ConfigManager.getCommonDirectory(),
+            distro,
+            serverId
+        )
+        modLoaderData = await distributionIndexProcessor.loadModLoaderVersionJson(serv)
+    } else {
+        // Para instalaciones personalizadas con loaders
+        const installation = ConfigManager.getInstallation(selectedInstallId)
+        
+        if(installation.loader && installation.loader.type !== 'vanilla') {
+            loggerLaunchSuite.info(`Instalación personalizada con loader: ${installation.loader.type}`)
+            
+            // Importar LoaderInstaller (ruta desde app/)
+            const { LoaderInstaller } = require('./assets/js/loaderinstaller')
+            const loaderInstaller = new LoaderInstaller(
+                ConfigManager.getCommonDirectory(),
+                path.join(ConfigManager.getInstanceDirectory(), installation.id),
+                {
+                    type: installation.loader.type,
+                    minecraftVersion: installation.loader.minecraftVersion,
+                    loaderVersion: installation.loader.loaderVersion
+                }
+            )
+            
+            try {
+                // Validar si el loader está instalado
+                const isValid = await loaderInstaller.validate()
+                
+                if(!isValid) {
+                    loggerLaunchSuite.info(`${installation.loader.type} no está instalado, descargando...`)
+                    setLaunchDetails(`Descargando ${installation.loader.type}...`)
+                    
+                    // Configurar callback de progreso para descarga y processors de Forge
+                    if (installation.loader.type === 'forge') {
+                        loaderInstaller.setProgressCallback((current, total, message) => {
+                            // Detectar si es progreso de descarga (bytes) o de processors (pasos)
+                            if (message && message.includes('Descargando')) {
+                                // Progreso de descarga - current/total son bytes
+                                const percent = total > 0 ? Math.floor((current / total) * 100) : 0
+                                setLaunchDetails(message)
+                                setLaunchPercentage(percent, 100)
+                            } else {
+                                // Progreso de processors - current/total son pasos
+                                setLaunchDetails(`Procesando Forge (${current}/${total})`)
+                                setLaunchPercentage(50 + Math.floor((current / total) * 30), 100)
+                            }
+                        })
+                    }
+                    
+                    await loaderInstaller.install()
+                }
+                
+                // Obtener version.json del loader
+                modLoaderData = await loaderInstaller.getVersionJson()
+                loggerLaunchSuite.info(`${installation.loader.type} version.json cargado`)
+                
+            } catch(error) {
+                loggerLaunchSuite.error(`Error instalando ${installation.loader.type}:`, error)
+                showLaunchFailure(`Error con ${installation.loader.type}`, error.message || 'Ver consola para detalles')
+                return
+            }
+        } else {
+            // Para instalaciones personalizadas Vanilla, usar versionData directamente
+            loggerLaunchSuite.info('Instalación personalizada - usando Vanilla puro (versionData como modManifest)')
+            modLoaderData = versionData
+            loggerLaunchSuite.info(`modLoaderData = versionData (${modLoaderData.id})`)
+        }
+    }
 
     if(login) {
         const authUser = ConfigManager.getSelectedAccount()
@@ -562,12 +1131,14 @@ async function dlAsync(login = true) {
 
         const onLoadComplete = () => {
             toggleLaunchArea(false)
-            if(hasRPC){
+            if(proc && hasRPC){
                 DiscordWrapper.updateDetails(Lang.queryJS('landing.discord.loading'))
                 proc.stdout.on('data', gameStateChange)
             }
-            proc.stdout.removeListener('data', tempListener)
-            proc.stderr.removeListener('data', gameErrorListener)
+            if(proc) {
+                proc.stdout.removeListener('data', tempListener)
+                proc.stderr.removeListener('data', gameErrorListener)
+            }
         }
         const start = Date.now()
 
@@ -608,22 +1179,61 @@ async function dlAsync(login = true) {
             // Build Minecraft process.
             proc = pb.build()
 
-            // Bind listeners to stdout.
-            proc.stdout.on('data', tempListener)
-            proc.stderr.on('data', gameErrorListener)
+            // Notificar al live log viewer que el juego inició
+            window.dispatchEvent(new CustomEvent('minecraft-process-started'))
+
+            // Wrapper para stdout que envía datos al live log viewer
+            const stdoutWrapper = function(data) {
+                // Enviar al live log viewer
+                window.dispatchEvent(new CustomEvent('minecraft-log-data', {
+                    detail: { data: data.toString(), isError: false }
+                }))
+                // Llamar listener original
+                tempListener(data)
+            }
+
+            // Wrapper para stderr que envía datos al live log viewer
+            const stderrWrapper = function(data) {
+                // Enviar al live log viewer
+                window.dispatchEvent(new CustomEvent('minecraft-log-data', {
+                    detail: { data: data.toString(), isError: true }
+                }))
+                // Llamar listener original
+                gameErrorListener(data)
+            }
+
+            // Bind listeners to stdout/stderr.
+            proc.stdout.on('data', stdoutWrapper)
+            proc.stderr.on('data', stderrWrapper)
 
             setLaunchDetails(Lang.queryJS('landing.dlAsync.doneEnjoyServer'))
 
-            // Init Discord Hook
-            if(distro.rawDistribution.discord != null && serv.rawServer.discord != null){
-                DiscordWrapper.initRPC(distro.rawDistribution.discord, serv.rawServer.discord)
-                hasRPC = true
-                proc.on('close', (code, signal) => {
+            // Listen for game close event to reset UI
+            proc.on('close', (code, signal) => {
+                loggerLaunchSuite.info(`Minecraft closed with code ${code}`)
+                
+                // Notificar al live log viewer
+                window.dispatchEvent(new CustomEvent('minecraft-process-closed', {
+                    detail: { code }
+                }))
+                
+                // Reset UI to allow launching again
+                toggleLaunchArea(false)
+                setLaunchEnabled(true)
+                proc = null
+                
+                // Shutdown Discord RPC if it was enabled
+                if(hasRPC) {
                     loggerLaunchSuite.info('Shutting down Discord Rich Presence..')
                     DiscordWrapper.shutdownRPC()
                     hasRPC = false
-                    proc = null
-                })
+                }
+            })
+
+            // Init Discord Hook (only for distribution servers with Discord config)
+            if(!selectedInstallId && distro.rawDistribution.discord != null && serv.rawServer.discord != null){
+                DiscordWrapper.initRPC(distro.rawDistribution.discord, serv.rawServer.discord)
+                hasRPC = true
             }
 
         } catch(err) {
@@ -953,15 +1563,42 @@ function displayArticle(articleObject, index){
 }
 
 /**
- * Load news information from the RSS feed specified in the
- * distribution index.
+ * Load news information. During TECNILAND Beta phase, always shows maintenance message.
+ * In future production, this will load from RSS feed.
  */
 async function loadNews(){
+    // TECNILAND Beta Phase: Always show maintenance message
+    // TODO: Remove this when ready for production and proper RSS feed is configured
+    loggerLanding.debug('TECNILAND Beta: Showing maintenance message.')
+    return {
+        articles: [{
+            link: 'https://github.com/Ppkeash/TECNILAND-Nexus',
+            title: Lang.queryJS('landing.news.maintenanceTitle'),
+            date: new Date().toLocaleDateString('es-ES', {month: 'short', day: 'numeric', year: 'numeric'}),
+            author: 'TECNILAND Team',
+            content: Lang.queryJS('landing.news.maintenanceContent'),
+            comments: '0 Comments',
+            commentsLink: 'https://github.com/Ppkeash/TECNILAND-Nexus/issues'
+        }]
+    }
 
+    /* PRODUCTION CODE - Uncomment when ready:
     const distroData = await DistroAPI.getDistribution()
-    if(!distroData.rawDistribution.rss) {
-        loggerLanding.debug('No RSS feed provided.')
-        return null
+    
+    // If no RSS configured, show maintenance message
+    if(!distroData.rawDistribution.rss || distroData.rawDistribution.rss === 'https://github.com') {
+        loggerLanding.debug('No RSS feed provided, showing maintenance message.')
+        return {
+            articles: [{
+                link: 'https://github.com/Ppkeash/TECNILAND-Nexus',
+                title: Lang.queryJS('landing.news.maintenanceTitle'),
+                date: new Date().toLocaleDateString('es-ES', {month: 'short', day: 'numeric', year: 'numeric'}),
+                author: 'TECNILAND Team',
+                content: Lang.queryJS('landing.news.maintenanceContent'),
+                comments: '0 Comments',
+                commentsLink: 'https://github.com/Ppkeash/TECNILAND-Nexus/issues'
+            }]
+        }
     }
 
     const promise = new Promise((resolve, reject) => {
@@ -1016,11 +1653,31 @@ async function loadNews(){
             },
             timeout: 2500
         }).catch(err => {
+            // On error, show maintenance message
             resolve({
-                articles: null
+                articles: [{
+                    link: 'https://github.com/Ppkeash/TECNILAND-Nexus',
+                    title: Lang.queryJS('landing.news.maintenanceTitle'),
+                    date: new Date().toLocaleDateString('es-ES', {month: 'short', day: 'numeric', year: 'numeric'}),
+                    author: 'TECNILAND Team',
+                    content: Lang.queryJS('landing.news.maintenanceContent'),
+                    comments: '0 Comments',
+                    commentsLink: 'https://github.com/Ppkeash/TECNILAND-Nexus/issues'
+                }]
             })
         })
     })
 
     return await promise
+    */
 }
+
+// Expose necessary functions globally for other scripts
+// These functions are called from uibinder.js, overlay.js, and settings.js
+window.updateSelectedServer = updateSelectedServer
+window.updateSelectedAccount = updateSelectedAccount
+window.refreshServerStatus = refreshServerStatus
+window.initNews = initNews
+window.reloadNews = reloadNews
+
+})() // End of IIFE

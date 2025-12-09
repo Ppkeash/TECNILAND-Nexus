@@ -11,7 +11,9 @@ mojangStatusNETitle = "Non&nbsp;Essential"
 newsButton = "NEWS"
 launchButton = "PLAY"
 launchButtonPlaceholder = "&#8226; No Server Selected"
+noSelection = "Select to Play"
 launchDetails = "Please wait.."
+processingForge = "Processing Forge..."
 newsNavigationStatus = "{currentPage} of {totalPages}"
 newsErrorLoadSpan = "Checking for News.."
 newsErrorFailedSpan = "Failed to Load News"
@@ -64,6 +66,8 @@ microsoftAccount = "Microsoft"
 addMicrosoftAccount = "+ Add Microsoft Account"
 mojangAccount = "Mojang"
 addMojangAccount = "+ Add Mojang Account"
+offlineAccount = "Offline Accounts"
+addOfflineAccount = "+ Add Offline Account"
 minecraftTabHeaderText = "Minecraft Settings"
 minecraftTabHeaderDesc = "Options related to game launch."
 gameResolutionTitle = "Game Resolution"
@@ -101,6 +105,18 @@ launcherTabHeaderText = "Launcher Settings"
 launcherTabHeaderDesc = "Options related to the launcher itself."
 allowPrereleaseTitle = "Allow Pre-Release Updates."
 allowPrereleaseDesc = "Pre-Releases include new features which may have not been fully tested or integrated.<br>This will always be true if you are using a pre-release version."
+showLegacyVersionsTitle = "Show Legacy Versions (< 1.13)"
+showLegacyVersionsDesc = "Enable Minecraft versions older than 1.13 when creating installations.<br>These versions are not compatible with the modern loader system (Forge 1.13+)."
+showLiveLogsTitle = "Show Live Minecraft Logs"
+showLiveLogsDesc = "Display a panel with real-time Minecraft logs during gameplay.<br>Includes timestamps, color-coding, and export functions. Useful for debugging."
+experimentalLoadersTitle = "Experimental Loaders (Fabric, Quilt, NeoForge)"
+experimentalLoadersDesc = "Enable experimental mod loaders in the installation selector.<br>⚠️ For developers only. These loaders are not fully implemented."
+experimentalLoadersWarningTitle = "⚠️ Experimental Loaders"
+experimentalLoadersWarningMessage = "If you're a developer and want to contribute to the proper integration of Fabric, Quilt, and NeoForge, go ahead.<br><br>Otherwise, these loaders <strong>will not work correctly</strong> because they are not fully implemented yet.<br><br><strong>Only enable this if you know what you're doing.</strong>"
+experimentalLoadersConfirm = "Understood, Enable"
+experimentalLoadersCancel = "Cancel"
+languageTitle = "Launcher Language"
+languageDesc = "Select the interface language. The launcher will restart to apply changes."
 dataDirectoryTitle = "Data Directory"
 selectDataDirectory = "Select Data Directory"
 chooseFolder = "Choose Folder"
@@ -179,10 +195,28 @@ installJavaManually = "Install Manually"
 javaDownloadPrepare = "Preparing Java Download.."
 javaDownloadFailureTitle = "Error During Java Download"
 javaDownloadFailureText = "See console (CTRL + Shift + i) for more details."
-javaRequired = "Java is Required<br>to Launch"
-javaRequiredMessage = 'A valid x64 installation of Java {major} is required to launch.<br><br>Please refer to our <a href="https://github.com/dscalzi/HeliosLauncher/wiki/Java-Management#manually-installing-a-valid-version-of-java">Java Management Guide</a> for instructions on how to manually install Java.'
-javaRequiredDismiss = "I Understand"
+javaRequired = 'Java is Required<br>to Launch'
+javaRequiredMessage = 'A valid x64 installation of Java {major} is required to launch.<br><br>Please search online for guides on how to manually install Java for your operating system.'
+javaRequiredDismiss = 'I Understand'
 javaRequiredCancel = "Go Back"
+
+[js.landing.javaManager]
+# Messages when user's configured Java is incompatible
+incompatibleTitle = "Incompatible Java<br>Detected"
+incompatibleMessage = "Your configured Java is not compatible with Minecraft {mcVersion}.<br><br>This version requires <b>Java {required}</b> (versions {minVersion}-{maxVersion}).<br><br>Would you like us to download the correct version automatically?"
+downloadCompatible = "Download Java {major}"
+cancel = "Cancel"
+
+# Messages when no Java is installed
+noJavaFound = "Minecraft {mcVersion} requires <b>Java {major}</b> to run.<br><br>No compatible version was found on your system.<br><br>Would you like us to install Java {major} automatically?"
+autoDownloading = "Downloading Java {major}..."
+downloadComplete = "Java {major} installed successfully!"
+downloadFailed = "Failed to download Java. Check the console for more details."
+
+# Status messages
+detectingJava = "Detecting installed Java versions..."
+selectingJava = "Selecting compatible Java..."
+usingJava = "Using Java {major} ({vendor})"
 
 [js.landing.downloadJava]
 findJdkFailure = "Failed to find OpenJDK distribution."
@@ -202,13 +236,36 @@ errorDuringFileVerificationTitle = "Error During File Verification"
 downloadingFiles = "Downloading files.."
 errorDuringFileDownloadTitle = "Error During File Download"
 preparingToLaunch = "Preparing to launch.."
-launchingGame = "Launching game.."
-launchWrapperNotDownloaded = "The main file, LaunchWrapper, failed to download properly. As a result, the game cannot launch.<br><br>To fix this issue, temporarily turn off your antivirus software and launch the game again.<br><br>If you have time, please <a href=\"https://github.com/dscalzi/HeliosLauncher/issues\">submit an issue</a> and let us know what antivirus software you use. We'll contact them and try to straighten things out."
-doneEnjoyServer = "Done. Enjoy the server!"
+launchingGame = 'Launching game..'
+launchWrapperNotDownloaded = "The main file, LaunchWrapper, failed to download properly. As a result, the game cannot launch.<br><br>To fix this issue, temporarily turn off your antivirus software and launch the game again."
+doneEnjoyServer = 'Done. Enjoy the server!'
 checkConsoleForDetails = "Please check the console (CTRL + Shift + i) for more details."
 
 [js.landing.news]
 checking = "Checking for News"
+maintenanceTitle = "🔧 TECNILAND Nexus - Beta Phase"
+maintenanceContent = """<div style="font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6;">
+<h3 style="color: #4CAF50; margin-bottom: 15px;">Welcome to TECNILAND Nexus!</h3>
+
+<p>The launcher is currently in <strong>Beta phase</strong>. We're working hard to bring you the best Minecraft experience.</p>
+
+<h4 style="color: #2196F3; margin-top: 20px;">✅ Available Features:</h4>
+<ul>
+<li><strong>Forge 1.13-1.21.x</strong> - Full support</li>
+<li><strong>JavaManager</strong> - Automatic Java management</li>
+<li><strong>Live Log Viewer</strong> - Real-time monitoring</li>
+<li><strong>Custom Installations</strong> - Create your own setup</li>
+</ul>
+
+<h4 style="color: #FF9800; margin-top: 20px;">🚧 Coming Soon:</h4>
+<ul>
+<li>Fabric, Quilt, and NeoForge support</li>
+<li>Preconfigured TECNILAND servers</li>
+<li>Dynamic news system</li>
+</ul>
+
+<p style="margin-top: 20px; color: #9E9E9E;">Found a bug? Report it on <a href="https://github.com/Ppkeash/TECNILAND-Nexus/issues" style="color: #4CAF50;">GitHub Issues</a></p>
+</div>"""
 
 [js.landing.discord]
 loading = "Loading game.."
@@ -284,6 +341,14 @@ errorTitle = "Microsoft Login Failed"
 errorMessage = "We were unable to authenticate your Microsoft account. Please try again."
 okButton = "OK"
 
+[js.settings]
+languageRestartTitle = "Restart Required"
+languageRestartMessage = "The language has been changed. Please restart the launcher to apply the changes."
+experimentalLoadersWarningTitle = "⚠️ Experimental Loaders"
+experimentalLoadersWarningMessage = "If you're a developer and want to contribute to the proper integration of Fabric, Quilt, and NeoForge, go ahead.<br><br>Otherwise, these loaders <strong>will not work correctly</strong> because they are not fully implemented yet.<br><br><strong>Only enable this if you know what you're doing.</strong>"
+experimentalLoadersConfirm = "Understood, Enable"
+experimentalLoadersCancel = "Cancel"
+
 [js.uibinder.startup]
 fatalErrorTitle = "Fatal Error: Unable to Load Distribution Index"
 fatalErrorMessage = "A connection could not be established to our servers to download the distribution index. No local copies were available to load. <br><br>The distribution index is an essential file which provides the latest server information. The launcher is unable to start without it. Ensure you are connected to the internet and relaunch the application."
@@ -342,3 +407,48 @@ gameNotPurchasedTitle = "Error During Login:<br>Game Not Purchased"
 gameNotPurchasedDesc = "The account you are trying to login with has not purchased a copy of Minecraft. You may purchase a copy on <a href=\"https://minecraft.net/\">Minecraft.net</a>"
 unknownErrorTitle = "Unknown Error During Login"
 unknownErrorDesc = "An unknown error has occurred. Please see the console for details."
+
+[js.installation.editor]
+title = "New Installation"
+subtitle = "Create a custom Minecraft installation"
+labelName = "Installation Name"
+placeholderName = "Ex: My Mod Server"
+helperName = "Choose a descriptive name to identify your installation"
+labelLoader = "Mod Loader Type"
+loaderVanilla = "Vanilla"
+loaderForge = "Forge"
+loaderFabric = "Fabric"
+loaderQuilt = "Quilt"
+loaderNeoForge = "NeoForge"
+labelMcVersion = "Minecraft Version"
+labelLoaderVersion = "Loader Version"
+loadingVersions = "Loading versions..."
+selectVersion = "Select a version"
+selectMcFirst = "Select Minecraft version first"
+noVersionsAvailable = "No versions available"
+errorLoadingVersions = "Error loading versions"
+buttonCreate = "Create Installation"
+buttonCancel = "Cancel"
+creating = "Creating..."
+
+[js.installation.errors]
+errorNameRequired = "You must enter a name for the installation"
+errorMcVersionRequired = "You must select a Minecraft version"
+errorLoaderVersionRequired = "You must select a {loader} version"
+errorLoadingMc = "Error loading Minecraft versions. Check your internet connection."
+errorLoadingLoader = "Error loading {loader} versions. Try another Minecraft version."
+errorNoLoaderVersions = "No {loader} versions available for Minecraft {mcVersion}"
+errorInvalidInstallation = "Invalid installation: {errors}"
+errorAlreadyExists = "Could not add installation. One with the same ID already exists."
+errorCreating = "Error creating installation: {message}"
+
+[js.installation.overlay]
+tabInstallations = "INSTALLATIONS"
+tabServers = "TECNILAND"
+buttonNewInstallation = "➞ New Installation"
+emptyMessage = "No custom installations.<br>Create a new one to get started."
+
+[js.installation.launch]
+errorNotFound = "The selected installation does not exist. Please select another installation."
+errorInvalid = "Invalid installation: {errors}. Please create a new installation."
+errorNoSelection = "You have not selected any installation or server. Please select one before launching."

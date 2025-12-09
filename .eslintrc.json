@@ -59,6 +59,12 @@
             ],
             "no-undef": [
                 0
+            ],
+            "indent": [
+                0
+            ],
+            "no-extra-semi": [
+                0
             ]
           }
         }

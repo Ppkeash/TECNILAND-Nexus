@@ -145,6 +145,22 @@ Only one server in the array should have the `mainServer` property enabled. This
 
 Whether or not the server can be autoconnected to. If false, the server will not be autoconnected to even when the user has the autoconnect setting enabled.
 
+### `Server.premiumOnly: boolean`
+
+**OPTIONAL** (Default: `false`)
+
+Specifies whether this server requires premium (authenticated) accounts. If set to `true`, offline accounts will not be able to connect to this server. This is useful for servers that require Mojang/Microsoft authentication and don't support cracked/offline players. When set to `false` or omitted, both premium and offline accounts can connect.
+
+**Example:**
+```json
+{
+    "id": "Premium_Server",
+    "name": "Premium Only Server",
+    "premiumOnly": true,
+    ...
+}
+```
+
 ### `Server.javaOptions: JavaOptions`
 
 **OPTIONAL**

@@ -1,6 +1,38 @@
+# Dependencies
 /node_modules/
+
+# Build outputs
+/dist/
+/target/
+
+# IDE & Editor
 /.vs/
 /.vscode/
-/target/
+/.idea/
+*.swp
+*.swo
+
+# Launcher data directories
+.tecnilandnexus/
+.helioslauncher/
+
+# Logs
 /logs/
-/dist/
+/LOGS/
+*.log
+
+# Development files
+distribution-local.json
+
+# OS-specific
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+temp/
+*.tmp
+*.bak
+
+# Electron
+*.asar

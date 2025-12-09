@@ -232,3 +232,165 @@ loginButton.addEventListener('click', () => {
     })
 
 })
+
+// -------------------- OFFLINE LOGIN --------------------
+
+// Offline Login Elements
+const loginOfflineContent = document.getElementById('loginOfflineContent')
+const loginOfflineForm = document.getElementById('loginOfflineForm')
+const loginOfflineUsername = document.getElementById('loginOfflineUsername')
+const loginOfflineUsernameError = document.getElementById('loginOfflineUsernameError')
+const loginOfflineButton = document.getElementById('loginOfflineButton')
+
+// Offline control variables
+let luOffline = false
+
+/**
+ * Validate offline username according to Minecraft standards.
+ * Username must be 3-16 characters, alphanumeric and underscores only.
+ * 
+ * @param {string} value The username value.
+ */
+function validateOfflineUsername(value) {
+    const minecraftUsernameRegex = /^[a-zA-Z0-9_]{3,16}$/
+    
+    if (value) {
+        if (!minecraftUsernameRegex.test(value)) {
+            showError(loginOfflineUsernameError, 'Username must be 3-16 characters (letters, numbers, and underscores only).')
+            loginOfflineDisabled(true)
+            luOffline = false
+        } else {
+            loginOfflineUsernameError.style.opacity = 0
+            luOffline = true
+            loginOfflineDisabled(false)
+        }
+    } else {
+        luOffline = false
+        showError(loginOfflineUsernameError, 'Username is required.')
+        loginOfflineDisabled(true)
+    }
+}
+
+// Validate offline username input
+loginOfflineUsername.addEventListener('input', (e) => {
+    validateOfflineUsername(e.target.value)
+})
+
+loginOfflineUsername.addEventListener('focusout', (e) => {
+    validateOfflineUsername(e.target.value)
+    shakeError(loginOfflineUsernameError)
+})
+
+/**
+ * Enable or disable the offline login button.
+ * 
+ * @param {boolean} v True to enable, false to disable.
+ */
+function loginOfflineDisabled(v) {
+    if (loginOfflineButton.disabled !== v) {
+        loginOfflineButton.disabled = v
+    }
+}
+
+/**
+ * Enable or disable offline login loading elements.
+ * 
+ * @param {boolean} v True to enable, false to disable.
+ */
+function loginOfflineLoading(v) {
+    if (v) {
+        loginOfflineButton.setAttribute('loading', v)
+        loginOfflineButton.innerHTML = loginOfflineButton.innerHTML.replace('Login Offline', 'Logging In...')
+    } else {
+        loginOfflineButton.removeAttribute('loading')
+        loginOfflineButton.innerHTML = loginOfflineButton.innerHTML.replace('Logging In...', 'Login Offline')
+    }
+}
+
+/**
+ * Enable or disable offline login form.
+ * 
+ * @param {boolean} v True to enable, false to disable.
+ */
+function formOfflineDisabled(v) {
+    loginOfflineDisabled(v)
+    loginOfflineUsername.disabled = v
+}
+
+// Disable default form behavior for offline form
+loginOfflineForm.onsubmit = () => { return false }
+
+// Bind offline login button behavior
+loginOfflineButton.addEventListener('click', () => {
+    // Disable form
+    formOfflineDisabled(true)
+    
+    // Show loading
+    loginOfflineLoading(true)
+    
+    AuthManager.addOfflineAccount(loginOfflineUsername.value).then((value) => {
+        updateSelectedAccount(value)
+        loginOfflineButton.innerHTML = loginOfflineButton.innerHTML.replace('Logging In...', 'Success!')
+        $('.circle-loader').toggleClass('load-complete')
+        $('.checkmark').toggle()
+        
+        setTimeout(() => {
+            switchView(VIEWS.login, loginViewOnSuccess, 500, 500, async () => {
+                // Temporary workaround
+                if (loginViewOnSuccess === VIEWS.settings) {
+                    await prepareSettings()
+                }
+                loginViewOnSuccess = VIEWS.landing // Reset
+                loginCancelEnabled(false) // Reset
+                loginViewCancelHandler = null // Reset
+                loginOfflineUsername.value = ''
+                $('.circle-loader').toggleClass('load-complete')
+                $('.checkmark').toggle()
+                loginOfflineLoading(false)
+                loginOfflineButton.innerHTML = loginOfflineButton.innerHTML.replace('Success!', 'Login Offline')
+                formOfflineDisabled(false)
+                
+                // Switch back to normal login view
+                $(loginOfflineContent).hide()
+                $(loginContent).show()
+            })
+        }, 1000)
+    }).catch((displayableError) => {
+        loginOfflineLoading(false)
+        
+        let actualDisplayableError
+        if (isDisplayableError(displayableError)) {
+            msftLoginLogger.error('Error while logging in offline.', displayableError)
+            actualDisplayableError = displayableError
+        } else {
+            msftLoginLogger.error('Unhandled error during offline login.', displayableError)
+            actualDisplayableError = {
+                title: 'Unknown Error',
+                desc: 'An unknown error occurred while creating offline account.'
+            }
+        }
+        
+        setOverlayContent(actualDisplayableError.title, actualDisplayableError.desc, 'Try Again')
+        setOverlayHandler(() => {
+            formOfflineDisabled(false)
+            toggleOverlay(false)
+        })
+        toggleOverlay(true)
+    })
+})
+
+/**
+ * Show the offline login form and hide the normal login form.
+ */
+function showOfflineLogin() {
+    $(loginContent).hide()
+    $(loginOfflineContent).show()
+}
+
+/**
+ * Show the normal login form and hide the offline login form.
+ */
+function showNormalLogin() {
+    $(loginOfflineContent).hide()
+    $(loginContent).show()
+}

@@ -9,6 +9,7 @@ const os                    = require('os')
 const path                  = require('path')
 
 const ConfigManager            = require('./configmanager')
+const JavaManager              = require('./javamanager')
 
 const logger = LoggerUtil.getLogger('ProcessBuilder')
 
@@ -50,9 +51,23 @@ class ProcessBuilder {
         process.throwDeprecation = true
         this.setupLiteLoader()
         logger.info('Using liteloader:', this.usingLiteLoader)
-        this.usingFabricLoader = this.server.modules.some(mdl => mdl.rawModule.type === Type.Fabric)
+        
+        // Validar que modules existe antes de usar .some()
+        // Para instalaciones custom, los módulos son objetos planos sin rawModule
+        this.usingFabricLoader = this.server.modules && this.server.modules.length > 0 
+            ? this.server.modules.some(mdl => {
+                const moduleType = mdl.rawModule ? mdl.rawModule.type : mdl.type
+                return moduleType === Type.Fabric
+            })
+            : false
         logger.info('Using fabric loader:', this.usingFabricLoader)
-        const modObj = this.resolveModConfiguration(ConfigManager.getModConfiguration(this.server.rawServer.id).mods, this.server.modules)
+        
+        // Para instalaciones custom sin modules, usar objeto vacío
+        const modules = this.server.modules || []
+        const modConfig = this.server.modules && this.server.modules.length > 0
+            ? ConfigManager.getModConfiguration(this.server.rawServer.id).mods
+            : {}
+        const modObj = this.resolveModConfiguration(modConfig, modules)
         
         // Mod list below 1.13
         // Fabric only supports 1.14+
@@ -77,7 +92,17 @@ class ProcessBuilder {
 
         logger.info('Launch Arguments:', loggableArgs)
 
-        const child = child_process.spawn(ConfigManager.getJavaExecutable(this.server.rawServer.id), args, {
+        // Get Java executable - should already be configured by landing.js
+        // This is the Java that was validated by JavaManager before launch
+        let javaExecutable = ConfigManager.getJavaExecutable(this.server.rawServer.id)
+        
+        // Log which Java we're using
+        const mcVersion = this.server.rawServer.minecraftVersion
+        const javaReqs = JavaManager.getJavaRequirements(mcVersion)
+        logger.info(`Launching Minecraft ${mcVersion} (requires Java ${javaReqs.min}-${javaReqs.max}, recommended: ${javaReqs.recommended})`)
+        logger.info(`Using Java executable: ${javaExecutable}`)
+
+        const child = child_process.spawn(javaExecutable, args, {
             cwd: this.gameDir,
             detached: ConfigManager.getLaunchDetached()
         })
@@ -89,14 +114,21 @@ class ProcessBuilder {
         child.stdout.setEncoding('utf8')
         child.stderr.setEncoding('utf8')
 
+        const logFile = path.join(this.commonDir, 'logs', 'minecraft-launch.log')
+        fs.ensureDirSync(path.dirname(logFile))
+        const logStream = fs.createWriteStream(logFile, { flags: 'w' })
+
         child.stdout.on('data', (data) => {
+            logStream.write('[STDOUT] ' + data)
             data.trim().split('\n').forEach(x => console.log(`\x1b[32m[Minecraft]\x1b[0m ${x}`))
             
         })
         child.stderr.on('data', (data) => {
+            logStream.write('[STDERR] ' + data)
             data.trim().split('\n').forEach(x => console.log(`\x1b[31m[Minecraft]\x1b[0m ${x}`))
         })
         child.on('close', (code, signal) => {
+            logStream.end()
             logger.info('Exited with code', code)
             fs.remove(tempNativePath, (err) => {
                 if(err){
@@ -148,22 +180,34 @@ class ProcessBuilder {
      * mod. It must not be declared as a submodule.
      */
     setupLiteLoader(){
+        // Validar que modules existe y tiene elementos
+        if(!this.server.modules || this.server.modules.length === 0){
+            return
+        }
+        
         for(let ll of this.server.modules){
-            if(ll.rawModule.type === Type.LiteLoader){
-                if(!ll.getRequired().value){
-                    const modCfg = ConfigManager.getModConfiguration(this.server.rawServer.id).mods
-                    if(ProcessBuilder.isModEnabled(modCfg[ll.getVersionlessMavenIdentifier()], ll.getRequired())){
+            // Para instalaciones custom, los módulos son objetos planos sin rawModule
+            const moduleType = ll.rawModule ? ll.rawModule.type : ll.type
+            
+            if(moduleType === Type.LiteLoader){
+                // Para módulos de distribución (con rawModule)
+                if(ll.rawModule) {
+                    if(!ll.getRequired().value){
+                        const modCfg = ConfigManager.getModConfiguration(this.server.rawServer.id).mods
+                        if(ProcessBuilder.isModEnabled(modCfg[ll.getVersionlessMavenIdentifier()], ll.getRequired())){
+                            if(fs.existsSync(ll.getPath())){
+                                this.usingLiteLoader = true
+                                this.llPath = ll.getPath()
+                            }
+                        }
+                    } else {
                         if(fs.existsSync(ll.getPath())){
                             this.usingLiteLoader = true
                             this.llPath = ll.getPath()
                         }
                     }
-                } else {
-                    if(fs.existsSync(ll.getPath())){
-                        this.usingLiteLoader = true
-                        this.llPath = ll.getPath()
-                    }
                 }
+                // Para instalaciones custom, LiteLoader no está soportado aún
             }
         }
     }
@@ -182,7 +226,8 @@ class ProcessBuilder {
         let lMods = []
 
         for(let mdl of mdls){
-            const type = mdl.rawModule.type
+            // Para instalaciones custom, los módulos son objetos planos sin rawModule
+            const type = mdl.rawModule ? mdl.rawModule.type : mdl.type
             if(type === Type.ForgeMod || type === Type.LiteMod || type === Type.LiteLoader || type === Type.FabricMod){
                 const o = !mdl.getRequired().value
                 const e = ProcessBuilder.isModEnabled(modCfg[mdl.getVersionlessMavenIdentifier()], mdl.getRequired())
@@ -275,29 +320,6 @@ class ProcessBuilder {
         return modList
     }
 
-    // /**
-    //  * Construct the mod argument list for forge 1.13
-    //  * 
-    //  * @param {Array.<Object>} mods An array of mods to add to the mod list.
-    //  */
-    // constructModArguments(mods){
-    //     const argStr = mods.map(mod => {
-    //         return mod.getExtensionlessMavenIdentifier()
-    //     }).join(',')
-
-    //     if(argStr){
-    //         return [
-    //             '--fml.mavenRoots',
-    //             path.join('..', '..', 'common', 'modstore'),
-    //             '--fml.mods',
-    //             argStr
-    //         ]
-    //     } else {
-    //         return []
-    //     }
-        
-    // }
-
     /**
      * Construct the mod argument list for forge 1.13 and Fabric
      * 
@@ -372,7 +394,7 @@ class ProcessBuilder {
 
         // Java Arguments
         if(process.platform === 'darwin'){
-            args.push('-Xdock:name=HeliosLauncher')
+            args.push('-Xdock:name=TECNILAND Nexus')
             args.push('-Xdock:icon=' + path.join(__dirname, '..', 'images', 'minecraft.icns'))
         }
         args.push('-Xmx' + ConfigManager.getMaxRAM(this.server.rawServer.id))
@@ -409,13 +431,19 @@ class ProcessBuilder {
         // Debug securejarhandler
         // args.push('-Dbsl.debug=true')
 
-        if(this.modManifest.arguments.jvm != null) {
+        // Solo agregar argumentos JVM del modManifest si es diferente de vanillaManifest
+        // (es decir, si hay un mod loader como Forge/Fabric)
+        if(this.modManifest !== this.vanillaManifest && this.modManifest.arguments.jvm != null) {
             for(const argStr of this.modManifest.arguments.jvm) {
-                args.push(argStr
-                    .replaceAll('${library_directory}', this.libPath)
-                    .replaceAll('${classpath_separator}', ProcessBuilder.getClasspathSeparator())
-                    .replaceAll('${version_name}', this.modManifest.id)
-                )
+                // Solo procesar si es un string (mod loaders como Forge/Fabric)
+                // Si es un objeto (vanilla rules), lo procesará después en el loop general
+                if(typeof argStr === 'string') {
+                    args.push(argStr
+                        .replaceAll('${library_directory}', this.libPath)
+                        .replaceAll('${classpath_separator}', ProcessBuilder.getClasspathSeparator())
+                        .replaceAll('${version_name}', this.modManifest.id)
+                    )
+                }
             }
         }
 
@@ -423,7 +451,7 @@ class ProcessBuilder {
 
         // Java Arguments
         if(process.platform === 'darwin'){
-            args.push('-Xdock:name=HeliosLauncher')
+            args.push('-Xdock:name=TECNILAND Nexus')
             args.push('-Xdock:icon=' + path.join(__dirname, '..', 'images', 'minecraft.icns'))
         }
         args.push('-Xmx' + ConfigManager.getMaxRAM(this.server.rawServer.id))
@@ -507,10 +535,12 @@ class ProcessBuilder {
                             val = this.authUser.uuid.trim()
                             break
                         case 'auth_access_token':
-                            val = this.authUser.accessToken
+                            // For offline accounts, use dummy token
+                            val = this.authUser.type === 'offline' ? '0' : this.authUser.accessToken
                             break
                         case 'user_type':
-                            val = this.authUser.type === 'microsoft' ? 'msa' : 'mojang'
+                            // Offline accounts use 'legacy' type, Microsoft uses 'msa', Mojang uses 'mojang'
+                            val = this.authUser.type === 'microsoft' ? 'msa' : (this.authUser.type === 'offline' ? 'legacy' : 'mojang')
                             break
                         case 'version_type':
                             val = this.vanillaManifest.type
@@ -546,7 +576,10 @@ class ProcessBuilder {
         
 
         // Forge Specific Arguments
-        args = args.concat(this.modManifest.arguments.game)
+        // Solo agregar si modManifest es diferente de vanillaManifest (tiene mod loader)
+        if(this.modManifest !== this.vanillaManifest && this.modManifest.arguments.game != null) {
+            args = args.concat(this.modManifest.arguments.game)
+        }
 
         // Filter null values
         args = args.filter(arg => {
@@ -591,10 +624,12 @@ class ProcessBuilder {
                         val = this.authUser.uuid.trim()
                         break
                     case 'auth_access_token':
-                        val = this.authUser.accessToken
+                        // For offline accounts, use dummy token
+                        val = this.authUser.type === 'offline' ? '0' : this.authUser.accessToken
                         break
                     case 'user_type':
-                        val = this.authUser.type === 'microsoft' ? 'msa' : 'mojang'
+                        // Offline accounts use 'legacy' type, Microsoft uses 'msa', Mojang uses 'mojang'
+                        val = this.authUser.type === 'microsoft' ? 'msa' : (this.authUser.type === 'offline' ? 'legacy' : 'mojang')
                         break
                     case 'user_properties': // 1.8.9 and below.
                         val = '{}'
@@ -675,9 +710,15 @@ class ProcessBuilder {
     classpathArg(mods, tempNativePath){
         let cpArgs = []
 
-        if(!mcVersionAtLeast('1.17', this.server.rawServer.minecraftVersion) || this.usingFabricLoader) {
-            // Add the version.jar to the classpath.
-            // Must not be added to the classpath for Forge 1.17+.
+        // Determine if this is a vanilla installation (no mod loaders)
+        const isVanilla = !this.usingLiteLoader && !this.usingFabricLoader && this.server.modules.length === 0
+        
+        // Add the version.jar to the classpath when:
+        // - Minecraft < 1.17 (always needed)
+        // - Using Fabric Loader (Fabric needs the vanilla JAR)
+        // - Pure Vanilla (no mod loaders at all)
+        // Must NOT be added for Forge 1.17+ (Forge bundles Minecraft in its own JAR)
+        if(!mcVersionAtLeast('1.17', this.server.rawServer.minecraftVersion) || this.usingFabricLoader || isVanilla) {
             const version = this.vanillaManifest.id
             cpArgs.push(path.join(this.commonDir, 'versions', version, version + '.jar'))
         }
@@ -693,15 +734,67 @@ class ProcessBuilder {
         // Resolve the server declared libraries.
         const servLibs = this._resolveServerLibraries(mods)
 
+        // Resolve mod loader libraries (Forge, Fabric, etc.) for custom installations
+        const loaderLibs = this._resolveModLoaderLibraries()
+
         // Merge libraries, server libs with the same
         // maven identifier will override the mojang ones.
         // Ex. 1.7.10 forge overrides mojang's guava with newer version.
-        const finalLibs = {...mojangLibs, ...servLibs}
+        const finalLibs = {...mojangLibs, ...servLibs, ...loaderLibs}
         cpArgs = cpArgs.concat(Object.values(finalLibs))
 
         this._processClassPathList(cpArgs)
 
         return cpArgs
+    }
+
+    /**
+     * Resolve libraries from mod loader version.json (Forge, Fabric, etc.)
+     * Used for custom installations with loaders.
+     * 
+     * @returns {{[id: string]: string}} An object containing the paths of each loader library.
+     */
+    _resolveModLoaderLibraries() {
+        const libs = {}
+
+        // Si no hay modManifest (instalación custom sin loader), retornar vacío
+        if (!this.modManifest || !this.modManifest.libraries) {
+            return libs
+        }
+
+        const librariesDir = path.join(this.commonDir, 'libraries')
+
+        for (const lib of this.modManifest.libraries) {
+            if (!lib.downloads || !lib.downloads.artifact) {
+                continue
+            }
+
+            const artifact = lib.downloads.artifact
+            const libPath = path.join(librariesDir, artifact.path)
+
+            // FIX: Generar ID sin versión para hacer override correcto sobre librerías de Mojang.
+            // Esto evita duplicados de Log4j2, JNA, etc.
+            // Formatos posibles de lib.name:
+            //   - "group:artifact:version" (3 partes) → ID = "group:artifact"
+            //   - "group:artifact:version:classifier" (4 partes) → ID = "group:artifact:classifier"
+            // El classifier es importante para diferenciar forge:universal vs forge:client en 1.21+
+            const parts = lib.name.split(':')
+            let versionIndependentId
+            if (parts.length >= 4) {
+                // 4+ partes: group:artifact:version:classifier → group:artifact:classifier
+                versionIndependentId = `${parts[0]}:${parts[1]}:${parts[3]}`
+            } else if (parts.length === 3) {
+                // 3 partes: group:artifact:version → group:artifact
+                versionIndependentId = `${parts[0]}:${parts[1]}`
+            } else {
+                // Fallback: usar nombre completo
+                versionIndependentId = lib.name
+            }
+            libs[versionIndependentId] = libPath
+        }
+
+        logger.info(`Resolved ${Object.keys(libs).length} mod loader libraries`)
+        return libs
     }
 
     /**
@@ -815,7 +908,15 @@ class ProcessBuilder {
                     const dlInfo = lib.downloads
                     const artifact = dlInfo.artifact
                     const to = path.join(this.libPath, artifact.path)
-                    const versionIndependentId = lib.name.substring(0, lib.name.lastIndexOf(':'))
+                    // Generar ID sin versión, pero preservando classifier si existe
+                    // Formato: group:artifact:version[:classifier] → group:artifact[:classifier]
+                    const parts = lib.name.split(':')
+                    let versionIndependentId
+                    if (parts.length >= 4) {
+                        versionIndependentId = `${parts[0]}:${parts[1]}:${parts[3]}`
+                    } else {
+                        versionIndependentId = lib.name.substring(0, lib.name.lastIndexOf(':'))
+                    }
                     libs[versionIndependentId] = to
                 }
             }
@@ -838,13 +939,19 @@ class ProcessBuilder {
 
         // Locate Forge/Fabric/Libraries
         for(let mdl of mdls){
-            const type = mdl.rawModule.type
+            // Para instalaciones custom, los módulos son objetos planos sin rawModule ni métodos
+            // Solo procesamos DistroModule que tienen los métodos necesarios
+            const type = mdl.rawModule ? mdl.rawModule.type : mdl.type
             if(type === Type.ForgeHosted || type === Type.Fabric || type === Type.Library){
-                libs[mdl.getVersionlessMavenIdentifier()] = mdl.getPath()
-                if(mdl.subModules.length > 0){
-                    const res = this._resolveModuleLibraries(mdl)
-                    libs = {...libs, ...res}
+                // Verificar que el módulo tenga los métodos de DistroModule
+                if(typeof mdl.getVersionlessMavenIdentifier === 'function' && typeof mdl.getPath === 'function'){
+                    libs[mdl.getVersionlessMavenIdentifier()] = mdl.getPath()
+                    if(mdl.subModules && mdl.subModules.length > 0){
+                        const res = this._resolveModuleLibraries(mdl)
+                        libs = {...libs, ...res}
+                    }
                 }
+                // Para instalaciones custom, el loader se maneja via version.json, no classpath
             }
         }
 
@@ -866,20 +973,25 @@ class ProcessBuilder {
      * @returns {{[id: string]: string}} An object containing the paths of each library this module requires.
      */
     _resolveModuleLibraries(mdl){
-        if(!mdl.subModules.length > 0){
+        if(!mdl.subModules || !mdl.subModules.length > 0){
             return {}
         }
         let libs = {}
         for(let sm of mdl.subModules){
-            if(sm.rawModule.type === Type.Library){
-
-                if(sm.rawModule.classpath ?? true) {
-                    libs[sm.getVersionlessMavenIdentifier()] = sm.getPath()
+            // Para instalaciones custom, los módulos son objetos planos sin rawModule
+            const subType = sm.rawModule ? sm.rawModule.type : sm.type
+            if(subType === Type.Library){
+                // Verificar que el submódulo tenga los métodos de DistroModule
+                if(typeof sm.getVersionlessMavenIdentifier === 'function' && typeof sm.getPath === 'function'){
+                    const classpath = sm.rawModule ? (sm.rawModule.classpath ?? true) : true
+                    if(classpath) {
+                        libs[sm.getVersionlessMavenIdentifier()] = sm.getPath()
+                    }
                 }
             }
             // If this module has submodules, we need to resolve the libraries for those.
             // To avoid unnecessary recursive calls, base case is checked here.
-            if(mdl.subModules.length > 0){
+            if(sm.subModules && sm.subModules.length > 0){
                 const res = this._resolveModuleLibraries(sm)
                 libs = {...libs, ...res}
             }

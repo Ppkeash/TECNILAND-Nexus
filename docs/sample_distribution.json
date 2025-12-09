@@ -25,6 +25,7 @@
             },
             "mainServer": true,
             "autoconnect": true,
+            "premiumOnly": true,
             "modules": [
                 {
                     "id": "net.minecraftforge:forge:1.11.2-13.20.1.2429",

@@ -68,6 +68,24 @@
                     <!-- Mojang auth accounts populated here. -->
                 </div>
             </div>
+
+            <div class="settingsAuthAccountTypeContainer">
+                <div class="settingsAuthAccountTypeHeader">
+                    <div class="settingsAuthAccountTypeHeaderLeft">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24">
+                            <path fill="#888" d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M12,6A6,6 0 0,1 18,12A6,6 0 0,1 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6M12,8A4,4 0 0,0 8,12A4,4 0 0,0 12,16A4,4 0 0,0 16,12A4,4 0 0,0 12,8Z" />
+                        </svg>
+                        <span><%- lang('settings.offlineAccount') %></span>
+                    </div>
+                    <div class="settingsAuthAccountTypeHeaderRight">
+                        <button class="settingsAddAuthAccount" id="settingsAddOfflineAccount"><%- lang('settings.addOfflineAccount') %></button>
+                    </div>
+                </div>
+                
+                <div class="settingsCurrentAccounts" id="settingsCurrentOfflineAccounts">
+                    <!-- Offline auth accounts populated here. -->
+                </div>
+            </div>
         </div>
         <div id="settingsTabMinecraft" class="settingsTab" style="display: none;">
             <div class="settingsTabHeader">
@@ -284,6 +302,69 @@
                         <input type="checkbox" cValue="AllowPrerelease">
                         <span class="toggleSwitchSlider"></span>
                     </label>
+                </div>
+            </div>
+            <div class="settingsFieldContainer">
+                <div class="settingsFieldLeft">
+                    <span class="settingsFieldTitle"><%- lang('settings.showLegacyVersionsTitle') %></span>
+                    <span class="settingsFieldDesc"><%- lang('settings.showLegacyVersionsDesc') %></span>
+                </div>
+                <div class="settingsFieldRight">
+                    <label class="toggleSwitch">
+                        <input type="checkbox" cValue="ShowLegacyVersions">
+                        <span class="toggleSwitchSlider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="settingsFieldContainer">
+                <div class="settingsFieldLeft">
+                    <span class="settingsFieldTitle"><%- lang('settings.showLiveLogsTitle') %></span>
+                    <span class="settingsFieldDesc"><%- lang('settings.showLiveLogsDesc') %></span>
+                </div>
+                <div class="settingsFieldRight">
+                    <label class="toggleSwitch">
+                        <input type="checkbox" cValue="ShowLiveLogs">
+                        <span class="toggleSwitchSlider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="settingsFieldContainer">
+                <div class="settingsFieldLeft">
+                    <span class="settingsFieldTitle"><%- lang('settings.experimentalLoadersTitle') %></span>
+                    <span class="settingsFieldDesc"><%- lang('settings.experimentalLoadersDesc') %></span>
+                </div>
+                <div class="settingsFieldRight">
+                    <label class="toggleSwitch">
+                        <input type="checkbox" cValue="ExperimentalLoaders" id="experimentalLoadersToggle">
+                        <span class="toggleSwitchSlider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="settingsFieldContainer">
+                <div class="settingsFieldLeft">
+                    <span class="settingsFieldTitle"><%- lang('settings.languageTitle') %></span>
+                    <span class="settingsFieldDesc"><%- lang('settings.showLegacyVersionsDesc') %></span>
+                </div>
+                <div class="settingsFieldRight">
+                    <label class="toggleSwitch">
+                        <input type="checkbox" cValue="ShowLegacyVersions">
+                        <span class="toggleSwitchSlider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="settingsFieldContainer">
+                <div class="settingsFieldLeft">
+                    <span class="settingsFieldTitle"><%- lang('settings.languageTitle') %></span>
+                    <span class="settingsFieldDesc"><%- lang('settings.languageDesc') %></span>
+                </div>
+                <div class="settingsFieldRight">
+                    <div class="settingsSelectContainer" style="width: 200px;">
+                        <div class="settingsSelectSelected" id="settingsLanguageSelected">Español</div>
+                        <div class="settingsSelectOptions" id="settingsLanguageOptions" hidden>
+                            <div value="es_ES" selected>Español</div>
+                            <div value="en_US">English</div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="settingsFileSelContainer">

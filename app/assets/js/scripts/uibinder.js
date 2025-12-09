@@ -6,9 +6,11 @@
 const path          = require('path')
 const { Type }      = require('helios-distribution-types')
 
-const AuthManager   = require('./assets/js/authmanager')
-const ConfigManager = require('./assets/js/configmanager')
-const { DistroAPI } = require('./assets/js/distromanager')
+const AuthManager          = require('./assets/js/authmanager')
+const ConfigManager        = require('./assets/js/configmanager')
+const InstallationManager  = require('./assets/js/installationmanager')
+const VersionAPI           = require('./assets/js/versionapi')
+const { DistroAPI }        = require('./assets/js/distromanager')
 
 let rscShouldLoad = false
 let fatalStartupError = false
@@ -326,6 +328,12 @@ function mergeModConfiguration(o, n, nReq = false){
 async function validateSelectedAccount(){
     const selectedAcc = ConfigManager.getSelectedAccount()
     if(selectedAcc != null){
+        // Skip validation for offline accounts
+        if(selectedAcc.type === 'offline'){
+            // Offline accounts are always valid
+            return true
+        }
+        
         const val = await AuthManager.validateSelected()
         if(!val){
             ConfigManager.removeAuthAccount(selectedAcc.uuid)

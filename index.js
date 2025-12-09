@@ -2,7 +2,7 @@ const remoteMain = require('@electron/remote/main')
 remoteMain.initialize()
 
 // Requirements
-const { app, BrowserWindow, ipcMain, Menu, shell } = require('electron')
+const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require('electron')
 const autoUpdater                       = require('electron-updater').autoUpdater
 const ejse                              = require('ejs-electron')
 const fs                                = require('fs')
@@ -12,9 +12,15 @@ const semver                            = require('semver')
 const { pathToFileURL }                 = require('url')
 const { AZURE_CLIENT_ID, MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR, SHELL_OPCODE } = require('./app/assets/js/ipcconstants')
 const LangLoader                        = require('./app/assets/js/langloader')
+const VersionAPI                        = require('./app/assets/js/versionapi')
 
-// Setup Lang
-LangLoader.setupLanguage()
+// Setup Lang for main process (without ConfigManager)
+LangLoader.setupLanguageMain()
+
+// Initialize version cache in background
+VersionAPI.initializeCache().catch(err => {
+    console.error('Error al inicializar caché de versiones:', err)
+})
 
 // Setup auto updater.
 function initAutoUpdater(event, data) {
@@ -51,7 +57,7 @@ function initAutoUpdater(event, data) {
 }
 
 // Open channel to listen for update actions.
-ipcMain.on('autoUpdateAction', (event, arg, data) => {
+ipcMain.on('autoUpdateAction', (event, arg, data, data2) => {
     switch(arg){
         case 'initAutoUpdater':
             console.log('Initializing auto updater.')
@@ -78,6 +84,14 @@ ipcMain.on('autoUpdateAction', (event, arg, data) => {
             break
         case 'installUpdateNow':
             autoUpdater.quitAndInstall()
+            break
+        case 'showRestartDialog':
+            dialog.showMessageBox({
+                type: 'info',
+                title: data,
+                message: data2,
+                buttons: ['OK']
+            })
             break
         default:
             console.log('Unknown argument', arg)

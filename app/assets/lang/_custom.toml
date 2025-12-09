@@ -1,18 +1,20 @@
 # Custom Language File for Launcher Customizer
+# Based on Helios Launcher by dscalzi
 
 [ejs.app]
-title = "Helios Launcher"
+title = "TECNILAND Nexus"
 
 [ejs.landing]
-mediaGitHubURL = "https://github.com/dscalzi/HeliosLauncher"
+mediaGitHubURL = "#"
 mediaXURL = "#"
 mediaInstagramURL = "#"
 mediaYouTubeURL = "#"
-mediaDiscordURL = "https://discord.gg/zNWUXdt"
+mediaDiscordURL = "#"
 
 [ejs.settings]
-sourceGithubLink = "https://github.com/dscalZi/HeliosLauncher"
-supportLink = "https://github.com/dscalZi/HeliosLauncher/issues"
+# Original: https://github.com/dscalzi/HeliosLauncher
+sourceGithubLink = "#"
+supportLink = "#"
 
 [ejs.welcome]
 welcomeHeader = "WELCOME TO WESTEROSCRAFT"

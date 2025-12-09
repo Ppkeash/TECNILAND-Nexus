@@ -1,6 +1,7 @@
 const loginOptionsCancelContainer = document.getElementById('loginOptionCancelContainer')
 const loginOptionMicrosoft = document.getElementById('loginOptionMicrosoft')
 const loginOptionMojang = document.getElementById('loginOptionMojang')
+const loginOptionOffline = document.getElementById('loginOptionOffline')
 const loginOptionsCancelButton = document.getElementById('loginOptionCancelButton')
 
 let loginOptionsCancellable = false
@@ -33,15 +34,26 @@ loginOptionMojang.onclick = (e) => {
         loginViewOnSuccess = loginOptionsViewOnLoginSuccess
         loginViewOnCancel = loginOptionsViewOnLoginCancel
         loginCancelEnabled(true)
+        showNormalLogin()
+    })
+}
+
+loginOptionOffline.onclick = (e) => {
+    switchView(getCurrentView(), VIEWS.login, 500, 500, () => {
+        loginViewOnSuccess = loginOptionsViewOnLoginSuccess
+        loginViewOnCancel = loginOptionsViewOnLoginCancel
+        loginCancelEnabled(true)
+        showOfflineLogin()
     })
 }
 
 loginOptionsCancelButton.onclick = (e) => {
     switchView(getCurrentView(), loginOptionsViewOnCancel, 500, 500, () => {
-        // Clear login values (Mojang login)
+        // Clear login values (Mojang and Offline login)
         // No cleanup needed for Microsoft.
         loginUsername.value = ''
         loginPassword.value = ''
+        loginOfflineUsername.value = ''
         if(loginOptionsViewCancelHandler != null){
             loginOptionsViewCancelHandler()
             loginOptionsViewCancelHandler = null

@@ -2,6 +2,18 @@
  * Script for overlay.ejs
  */
 
+// ConfigManager, InstallationManager, ipcRenderer y remote ya están disponibles globalmente
+// const ConfigManager = require('../configmanager')
+// const InstallationManager = require('../installationmanager')
+// const { ipcRenderer } = require('electron')
+// const remote = require('@electron/remote')
+const { BrowserWindow } = remote
+
+// Listen for experimental loaders setting change from settings.js
+window.addEventListener('experimental-loaders-changed', () => {
+    updateExperimentalLoadersVisibility()
+})
+
 /* Overlay Wrapper Functions */
 
 /**
@@ -172,20 +184,56 @@ function setDismissHandler(handler){
 /* Server Select View */
 
 document.getElementById('serverSelectConfirm').addEventListener('click', async () => {
-    const listings = document.getElementsByClassName('serverListing')
-    for(let i=0; i<listings.length; i++){
-        if(listings[i].hasAttribute('selected')){
-            const serv = (await DistroAPI.getDistribution()).getServerById(listings[i].getAttribute('servid'))
+    // Verificar si hay una instalación personalizada seleccionada
+    const installationListings = document.getElementsByClassName('installationListing')
+    for(let i=0; i<installationListings.length; i++){
+        if(installationListings[i].hasAttribute('selected')){
+            const installId = installationListings[i].getAttribute('installid')
+            const installation = ConfigManager.getInstallation(installId)
+            
+            if(installation){
+                // Convertir instalación a servidor virtual
+                const virtualServer = InstallationManager.installationToServer(installation)
+                
+                // Guardar instalación seleccionada
+                ConfigManager.setSelectedInstallation(installId)
+                ConfigManager.setSelectedServer(null) // Limpiar servidor TECNILAND
+                ConfigManager.save()
+                
+                // Actualizar UI (usar el servidor virtual como si fuera un servidor real)
+                updateSelectedServer({ rawServer: virtualServer })
+                refreshServerStatus(true)
+                toggleOverlay(false)
+                return
+            }
+        }
+    }
+
+    // Si no hay instalación seleccionada, verificar servidores TECNILAND
+    const serverListings = document.getElementsByClassName('serverListing')
+    for(let i=0; i<serverListings.length; i++){
+        if(serverListings[i].hasAttribute('selected')){
+            const serv = (await DistroAPI.getDistribution()).getServerById(serverListings[i].getAttribute('servid'))
             updateSelectedServer(serv)
+            
+            // Guardar servidor seleccionado
+            ConfigManager.setSelectedServer(serv.rawServer.id)
+            ConfigManager.setSelectedInstallation(null) // Limpiar instalación
+            ConfigManager.save()
+            
             refreshServerStatus(true)
             toggleOverlay(false)
             return
         }
     }
+    
     // None are selected? Not possible right? Meh, handle it.
-    if(listings.length > 0){
-        const serv = (await DistroAPI.getDistribution()).getServerById(listings[i].getAttribute('servid'))
+    if(serverListings.length > 0){
+        const serv = (await DistroAPI.getDistribution()).getServerById(serverListings[0].getAttribute('servid'))
         updateSelectedServer(serv)
+        ConfigManager.setSelectedServer(serv.rawServer.id)
+        ConfigManager.setSelectedInstallation(null)
+        ConfigManager.save()
         toggleOverlay(false)
     }
 })
@@ -242,10 +290,92 @@ function setServerListingHandlers(){
                     cListings[i].removeAttribute('selected')
                 }
             }
+            // También limpiar selección de instalaciones
+            const installListings = document.getElementsByClassName('installationListing')
+            for(let i=0; i<installListings.length; i++){
+                if(installListings[i].hasAttribute('selected')){
+                    installListings[i].removeAttribute('selected')
+                }
+            }
             val.setAttribute('selected', '')
             document.activeElement.blur()
         }
     })
+}
+
+function setInstallationListingHandlers(){
+    const listings = Array.from(document.getElementsByClassName('installationListing'))
+    listings.map((val) => {
+        val.onclick = e => {
+            if(val.hasAttribute('selected')){
+                return
+            }
+            const cListings = document.getElementsByClassName('installationListing')
+            for(let i=0; i<cListings.length; i++){
+                if(cListings[i].hasAttribute('selected')){
+                    cListings[i].removeAttribute('selected')
+                }
+            }
+            // También limpiar selección de servidores
+            const serverListings = document.getElementsByClassName('serverListing')
+            for(let i=0; i<serverListings.length; i++){
+                if(serverListings[i].hasAttribute('selected')){
+                    serverListings[i].removeAttribute('selected')
+                }
+            }
+            val.setAttribute('selected', '')
+            document.activeElement.blur()
+        }
+        
+        // Agregar menú contextual (click derecho)
+        val.oncontextmenu = e => {
+            e.preventDefault()
+            const installId = val.getAttribute('installid')
+            const installation = ConfigManager.getInstallation(installId)
+            
+            if(installation){
+                showDeleteInstallationConfirmation(installId, installation.name)
+            }
+        }
+    })
+}
+
+function showDeleteInstallationConfirmation(installId, installName){
+    setOverlayContent(
+        '¿Eliminar Instalación?',
+        `¿Estás seguro de que deseas eliminar la instalación <strong>${installName}</strong>?<br><br>Esta acción no se puede deshacer.`,
+        'Eliminar',
+        'Cancelar'
+    )
+    
+    setOverlayHandler(() => {
+        // Eliminar instalación
+        const success = ConfigManager.deleteInstallation(installId)
+        
+        if(success){
+            ConfigManager.save()
+            
+            // Refrescar lista de instalaciones
+            populateInstallationListings()
+            setInstallationListingHandlers()
+            
+            // Si la instalación eliminada estaba seleccionada, seleccionar el primer servidor
+            const selectedInstall = ConfigManager.getSelectedInstallation()
+            if(!selectedInstall){
+                // Seleccionar automáticamente TECNILAND
+                ConfigManager.setSelectedServer('tecniland-wZJmEG')
+                ConfigManager.save()
+            }
+        }
+        
+        toggleOverlay(false)
+    })
+    
+    setDismissHandler(() => {
+        toggleOverlay(false)
+    })
+    
+    toggleOverlay(true, true)
 }
 
 function setAccountListingHandlers(){
@@ -313,9 +443,414 @@ function populateAccountListings(){
 
 }
 
+function populateInstallationListings(){
+    const installations = ConfigManager.getInstallations()
+    const selectedInstallId = ConfigManager.getSelectedInstallation()
+    let htmlString = ''
+    
+    if(installations.length === 0){
+        htmlString = '<div style="text-align: center; padding: 40px 20px; color: rgba(255,255,255,0.6); font-style: italic;">No hay instalaciones personalizadas.<br>Crea una nueva para comenzar.</div>'
+    } else {
+        for(const install of installations){
+            const info = InstallationManager.getInstallationInfo(install)
+            const loaderIcon = {
+                'vanilla': '🟩',
+                'forge': '🔨',
+                'fabric': '🧵',
+                'quilt': '🪡',
+                'neoforge': '⚒️'
+            }[install.loader.type] || '📦'
+            
+            htmlString += `<button class="installationListing serverListing" installid="${install.id}" ${install.id === selectedInstallId ? 'selected' : ''}>
+                <div style="font-size: 32px; margin-right: 15px;">${loaderIcon}</div>
+                <div class="serverListingDetails">
+                    <span class="serverListingName">${install.name}</span>
+                    <span class="serverListingDescription">${info.loader.toUpperCase()} ${info.loaderVersion || ''} (MC ${info.minecraftVersion})</span>
+                    <div class="serverListingInfo">
+                        <div class="serverListingVersion">MC ${info.minecraftVersion}</div>
+                        <div class="serverListingRevision">${info.loader}</div>
+                    </div>
+                </div>
+            </button>`
+        }
+    }
+    
+    document.getElementById('installationSelectListScrollable').innerHTML = htmlString
+}
+
 async function prepareServerSelectionList(){
+    // Poblar instalaciones
+    populateInstallationListings()
+    setInstallationListingHandlers()
+    
+    // Poblar servidores
     await populateServerListings()
     setServerListingHandlers()
+    
+    // Configurar tabs
+    setupServerSelectTabs()
+    
+    // Configurar botón de crear instalación
+    document.getElementById('createNewInstallation').onclick = () => {
+        openInstallationEditor()
+    }
+}
+
+function setupServerSelectTabs(){
+    const tabInstallations = document.getElementById('tabInstallations')
+    const tabServers = document.getElementById('tabServers')
+    const installationList = document.getElementById('installationSelectListScrollable')
+    const serverList = document.getElementById('serverSelectListScrollable')
+    const createButton = document.getElementById('installationCreateButton')
+    
+    tabInstallations.onclick = () => {
+        // Activar tab instalaciones
+        tabInstallations.style.background = 'rgba(255,255,255,0.2)'
+        tabInstallations.style.borderColor = 'rgba(255,255,255,0.4)'
+        tabInstallations.querySelector('span').style.color = 'white'
+        
+        // Desactivar tab servidores
+        tabServers.style.background = 'rgba(255,255,255,0.1)'
+        tabServers.style.borderColor = 'rgba(255,255,255,0.2)'
+        tabServers.querySelector('span').style.color = 'rgba(255,255,255,0.7)'
+        
+        // Mostrar lista de instalaciones
+        installationList.style.display = 'block'
+        serverList.style.display = 'none'
+        createButton.style.display = 'block'
+        
+        // Actualizar header con contexto
+        document.getElementById('serverSelectHeader').textContent = '🎮 Selecciona una Instalación Personalizada'
+    }
+    
+    tabServers.onclick = () => {
+        // Activar tab servidores
+        tabServers.style.background = 'rgba(255,255,255,0.2)'
+        tabServers.style.borderColor = 'rgba(255,255,255,0.4)'
+        tabServers.querySelector('span').style.color = 'white'
+        
+        // Desactivar tab instalaciones
+        tabInstallations.style.background = 'rgba(255,255,255,0.1)'
+        tabInstallations.style.borderColor = 'rgba(255,255,255,0.2)'
+        tabInstallations.querySelector('span').style.color = 'rgba(255,255,255,0.7)'
+        
+        // Mostrar lista de servidores
+        installationList.style.display = 'none'
+        serverList.style.display = 'block'
+        createButton.style.display = 'none'
+        
+        // Actualizar header con contexto
+        document.getElementById('serverSelectHeader').textContent = '🌐 Selecciona un Modpack TECNILAND'
+    }
+}
+
+// ============================================================================
+// Installation Editor (Inline)
+// ============================================================================
+
+let currentEditorLoader = 'vanilla'
+let minecraftVersions = []
+let loaderVersions = []
+
+function openInstallationEditor(){
+    // Ocultar selector de servidores
+    document.getElementById('serverSelectContent').style.display = 'none'
+    // Mostrar editor inline
+    document.getElementById('installationEditorContent').style.display = 'block'
+    
+    // Resetear formulario
+    resetInstallationEditorForm()
+    
+    // Aplicar visibilidad de loaders experimentales
+    updateExperimentalLoadersVisibility()
+    
+    // Cargar versiones de Minecraft
+    loadMinecraftVersionsInline()
+    
+    // Setup handlers
+    setupInstallationEditorHandlers()
+}
+
+/**
+ * Update visibility of experimental loaders (Fabric, Quilt, NeoForge)
+ * based on the ExperimentalLoaders setting in ConfigManager
+ */
+function updateExperimentalLoadersVisibility() {
+    const experimentalLoaders = ['fabric', 'quilt', 'neoforge']
+    const showExperimental = ConfigManager.getExperimentalLoaders()
+    
+    experimentalLoaders.forEach(loader => {
+        const btn = document.querySelector(`.installationEditorLoaderBtn[data-loader="${loader}"]`)
+        if (btn) {
+            btn.style.display = showExperimental ? '' : 'none'
+        }
+    })
+}
+
+function resetInstallationEditorForm() {
+    document.getElementById('installationEditorName').value = ''
+    document.getElementById('installationEditorMcVersion').value = ''
+    document.getElementById('installationEditorLoaderVersion').value = ''
+    document.getElementById('installationEditorLoaderVersionGroup').style.display = 'none'
+    document.getElementById('installationEditorErrorMessage').style.display = 'none'
+    currentEditorLoader = 'vanilla'
+    
+    // Resetear botones de loader
+    document.querySelectorAll('.installationEditorLoaderBtn').forEach(btn => {
+        btn.classList.remove('active')
+        if(btn.dataset.loader === 'vanilla') {
+            btn.classList.add('active')
+        }
+    })
+    
+    updateCreateButtonState()
+}
+
+function setupInstallationEditorHandlers() {
+    // Loader selector
+    document.querySelectorAll('.installationEditorLoaderBtn').forEach(btn => {
+        btn.onclick = async function() {
+            document.querySelectorAll('.installationEditorLoaderBtn').forEach(b => b.classList.remove('active'))
+            this.classList.add('active')
+            currentEditorLoader = this.dataset.loader
+            
+            const loaderVersionGroup = document.getElementById('installationEditorLoaderVersionGroup')
+            if(currentEditorLoader === 'vanilla') {
+                loaderVersionGroup.style.display = 'none'
+            } else {
+                loaderVersionGroup.style.display = 'block'
+            }
+            
+            const mcVersion = document.getElementById('installationEditorMcVersion').value
+            if(mcVersion) {
+                await loadLoaderVersionsInline(mcVersion)
+            }
+            
+            updateCreateButtonState()
+        }
+    })
+    
+    // MC version change
+    document.getElementById('installationEditorMcVersion').onchange = async function() {
+        if(currentEditorLoader !== 'vanilla' && this.value) {
+            await loadLoaderVersionsInline(this.value)
+        }
+        updateCreateButtonState()
+    }
+    
+    // Loader version change
+    document.getElementById('installationEditorLoaderVersion').onchange = function() {
+        updateCreateButtonState()
+    }
+    
+    // Name input
+    document.getElementById('installationEditorName').oninput = function() {
+        updateCreateButtonState()
+    }
+    
+    // Cancel button
+    document.getElementById('installationEditorCancel').onclick = function() {
+        closeInstallationEditor()
+    }
+    
+    // Form submit
+    document.getElementById('installationEditorForm').onsubmit = async function(e) {
+        e.preventDefault()
+        await createInstallationFromForm()
+    }
+}
+
+async function loadMinecraftVersionsInline() {
+    const mcVersionSelect = document.getElementById('installationEditorMcVersion')
+    
+    try {
+        mcVersionSelect.innerHTML = '<option value="">Cargando versiones...</option>'
+        mcVersionSelect.disabled = true
+        
+        const versions = await VersionAPI.getMinecraftVersions()
+        
+        // Verificar si mostrar versiones legacy (< 1.13)
+        const showLegacy = ConfigManager.getShowLegacyVersions()
+        
+        // Filtrar versiones legacy si está deshabilitado
+        let filteredReleases = versions.releases
+        if (!showLegacy) {
+            filteredReleases = versions.releases.filter(v => {
+                const parts = v.id.split('.')
+                if (parts.length >= 2) {
+                    const major = parseInt(parts[0], 10)
+                    const minor = parseInt(parts[1], 10)
+                    return major >= 1 && minor >= 13
+                }
+                return false
+            })
+        }
+        
+        minecraftVersions = filteredReleases
+        
+        mcVersionSelect.innerHTML = '<option value="">Selecciona una versión</option>'
+        filteredReleases.forEach(version => {
+            const option = document.createElement('option')
+            option.value = version.id
+            option.textContent = version.id
+            mcVersionSelect.appendChild(option)
+        })
+        
+        mcVersionSelect.disabled = false
+        
+    } catch(err) {
+        console.error('Error al cargar versiones de Minecraft:', err)
+        showInstallationEditorError('Error al cargar versiones de Minecraft. Verifica tu conexión.')
+        mcVersionSelect.innerHTML = '<option value="">Error al cargar</option>'
+    }
+}
+
+async function loadLoaderVersionsInline(minecraftVersion) {
+    const loaderVersionSelect = document.getElementById('installationEditorLoaderVersion')
+    
+    try {
+        loaderVersionSelect.innerHTML = '<option value="">Cargando versiones...</option>'
+        loaderVersionSelect.disabled = true
+        
+        let versions = []
+        
+        switch(currentEditorLoader) {
+            case 'forge': {
+                versions = await VersionAPI.getForgeVersions(minecraftVersion)
+                break
+            }
+            case 'fabric': {
+                const fabricVersions = await VersionAPI.getFabricVersions(minecraftVersion)
+                versions = fabricVersions.map(v => v.version)
+                break
+            }
+            case 'quilt': {
+                const quiltVersions = await VersionAPI.getQuiltVersions(minecraftVersion)
+                versions = quiltVersions.map(v => v.version)
+                break
+            }
+            case 'neoforge': {
+                versions = await VersionAPI.getNeoForgeVersions(minecraftVersion)
+                break
+            }
+        }
+        
+        loaderVersions = versions
+        
+        if(versions.length === 0) {
+            loaderVersionSelect.innerHTML = '<option value="">No hay versiones disponibles</option>'
+            showInstallationEditorError(`No hay versiones de ${currentEditorLoader} para Minecraft ${minecraftVersion}`)
+            return
+        }
+        
+        loaderVersionSelect.innerHTML = '<option value="">Selecciona una versión</option>'
+        versions.forEach(version => {
+            const option = document.createElement('option')
+            option.value = version
+            option.textContent = version
+            loaderVersionSelect.appendChild(option)
+        })
+        
+        if(versions.length > 0) {
+            loaderVersionSelect.value = versions[0]
+        }
+        
+        loaderVersionSelect.disabled = false
+        
+    } catch(err) {
+        console.error(`Error al cargar versiones de ${currentEditorLoader}:`, err)
+        showInstallationEditorError(`Error al cargar versiones de ${currentEditorLoader}`)
+        loaderVersionSelect.innerHTML = '<option value="">Error al cargar</option>'
+    }
+}
+
+async function createInstallationFromForm() {
+    const name = document.getElementById('installationEditorName').value.trim()
+    const minecraftVersion = document.getElementById('installationEditorMcVersion').value
+    const loaderVersion = currentEditorLoader === 'vanilla' ? null : document.getElementById('installationEditorLoaderVersion').value
+    
+    if(!name || !minecraftVersion) {
+        showInstallationEditorError('Por favor completa todos los campos requeridos')
+        return
+    }
+    
+    if(currentEditorLoader !== 'vanilla' && !loaderVersion) {
+        showInstallationEditorError(`Debes seleccionar una versión de ${currentEditorLoader}`)
+        return
+    }
+    
+    const createBtn = document.getElementById('installationEditorCreate')
+    createBtn.disabled = true
+    createBtn.innerHTML = 'Crear instalación...'
+    
+    try {
+        const installation = InstallationManager.createInstallation({
+            name,
+            loaderType: currentEditorLoader,
+            minecraftVersion,
+            loaderVersion
+        })
+        
+        const validation = InstallationManager.validateInstallation(installation)
+        if(!validation.valid) {
+            showInstallationEditorError(`Instalación no válida: ${validation.errors.join(', ')}`)
+            createBtn.disabled = false
+            createBtn.innerHTML = '✅ Crear Instalación'
+            return
+        }
+        
+        const added = ConfigManager.addInstallation(installation)
+        if(!added) {
+            showInstallationEditorError('No se pudo agregar la instalación. Ya existe una con el mismo nombre.')
+            createBtn.disabled = false
+            createBtn.innerHTML = '✅ Crear Instalación'
+            return
+        }
+        
+        ConfigManager.save()
+        
+        // Cerrar editor y volver al selector
+        closeInstallationEditor()
+        
+        // Refrescar lista
+        await prepareServerSelectionList()
+        
+    } catch(err) {
+        console.error('Error al crear instalación:', err)
+        showInstallationEditorError(`Error al crear instalación: ${err.message}`)
+        createBtn.disabled = false
+        createBtn.innerHTML = '✅ Crear Instalación'
+    }
+}
+
+function closeInstallationEditor() {
+    document.getElementById('installationEditorContent').style.display = 'none'
+    document.getElementById('serverSelectContent').style.display = 'flex'
+}
+
+function showInstallationEditorError(message) {
+    const errorEl = document.getElementById('installationEditorErrorMessage')
+    errorEl.textContent = '⚠️ ' + message
+    errorEl.style.display = 'block'
+    
+    setTimeout(() => {
+        errorEl.style.display = 'none'
+    }, 5000)
+}
+
+function updateCreateButtonState() {
+    const createBtn = document.getElementById('installationEditorCreate')
+    const name = document.getElementById('installationEditorName').value.trim()
+    const mcVersion = document.getElementById('installationEditorMcVersion').value
+    const loaderVersion = document.getElementById('installationEditorLoaderVersion').value
+    
+    let isValid = name.length > 0 && mcVersion
+    
+    if(currentEditorLoader !== 'vanilla') {
+        isValid = isValid && loaderVersion
+    }
+    
+    createBtn.disabled = !isValid
 }
 
 function prepareAccountSelectionList(){

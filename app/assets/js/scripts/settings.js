@@ -4,6 +4,10 @@ const semver = require('semver')
 
 const DropinModUtil  = require('./assets/js/dropinmodutil')
 const { MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR } = require('./assets/js/ipcconstants')
+const {
+    validateSelectedJvm,
+    ensureJavaDirIsRoot
+}                    = require('helios-core/java')
 
 const settingsState = {
     invalid: new Set()
@@ -79,6 +83,106 @@ bindFileSelectors()
 
 
 /**
+ * Bind the language selector functionality.
+ */
+function bindLanguageSelector(){
+    const languageOptions = document.getElementById('settingsLanguageOptions')
+    const languageSelected = document.getElementById('settingsLanguageSelected')
+    
+    // Set initial value from config
+    const currentLang = ConfigManager.getLanguage()
+    for(let opt of languageOptions.children) {
+        if(opt.getAttribute('value') === currentLang) {
+            opt.setAttribute('selected', '')
+            languageSelected.innerHTML = opt.innerHTML
+        }
+    }
+    
+    // Handle language change
+    for(let opt of languageOptions.children) {
+        opt.addEventListener('click', function(e) {
+            const selectedLang = this.getAttribute('value')
+            const currentLang = ConfigManager.getLanguage()
+            
+            // Only proceed if language actually changed
+            if(selectedLang !== currentLang) {
+                // Update UI
+                this.parentNode.previousElementSibling.innerHTML = this.innerHTML
+                for(let sib of this.parentNode.children) {
+                    sib.removeAttribute('selected')
+                }
+                this.setAttribute('selected', '')
+                
+                // Save to config
+                ConfigManager.setLanguage(selectedLang)
+                ConfigManager.save()
+                
+                // Show restart notification
+                const {ipcRenderer} = require('electron')
+                ipcRenderer.send('autoUpdateAction', 'showRestartDialog', Lang.queryJS('settings.languageRestartTitle'), Lang.queryJS('settings.languageRestartMessage'))
+            }
+            
+            closeSettingsSelect()
+        })
+    }
+}
+
+bindLanguageSelector()
+
+/**
+ * Bind the experimental loaders toggle with warning modal.
+ * When user tries to enable it, show a warning overlay first.
+ */
+function bindExperimentalLoadersToggle(){
+    const toggle = document.getElementById('experimentalLoadersToggle')
+    if (!toggle) return
+    
+    toggle.addEventListener('change', function(e) {
+        // If user is trying to enable experimental loaders
+        if (e.target.checked) {
+            // Prevent the change temporarily
+            e.target.checked = false
+            
+            // Show warning overlay
+            setOverlayContent(
+                Lang.queryJS('settings.experimentalLoadersWarningTitle'),
+                Lang.queryJS('settings.experimentalLoadersWarningMessage'),
+                Lang.queryJS('settings.experimentalLoadersConfirm'),
+                Lang.queryJS('settings.experimentalLoadersCancel')
+            )
+            
+            setOverlayHandler(() => {
+                // User confirmed - enable experimental loaders
+                toggle.checked = true
+                ConfigManager.setExperimentalLoaders(true)
+                ConfigManager.save()
+                toggleOverlay(false)
+                // Dispatch event so installation-editor can update
+                window.dispatchEvent(new CustomEvent('experimental-loaders-changed', { detail: { enabled: true } }))
+            })
+            
+            setDismissHandler(() => {
+                // User cancelled - keep disabled
+                toggle.checked = false
+                toggleOverlay(false)
+            })
+            
+            toggleOverlay(true, true)
+        } else {
+            // User is disabling - no confirmation needed
+            ConfigManager.setExperimentalLoaders(false)
+            ConfigManager.save()
+            // Dispatch event so installation-editor can update
+            window.dispatchEvent(new CustomEvent('experimental-loaders-changed', { detail: { enabled: false } }))
+        }
+    })
+}
+
+// Initialize experimental loaders toggle handler
+bindExperimentalLoadersToggle()
+
+
+/**
  * General Settings Functions
  */
 
@@ -131,7 +235,9 @@ async function initSettingsValues(){
         const gFn = ConfigManager['get' + cVal]
         const gFnOpts = []
         if(serverDependent) {
-            gFnOpts.push(ConfigManager.getSelectedServer())
+            // Usar installation ID si hay una instalación custom seleccionada, sino usar server ID
+            const selectedInstallId = ConfigManager.getSelectedInstallation()
+            gFnOpts.push(selectedInstallId || ConfigManager.getSelectedServer())
         }
         if(typeof gFn === 'function'){
             if(v.tagName === 'INPUT'){
@@ -183,7 +289,9 @@ function saveSettingsValues(){
         const sFn = ConfigManager['set' + cVal]
         const sFnOpts = []
         if(serverDependent) {
-            sFnOpts.push(ConfigManager.getSelectedServer())
+            // Usar installation ID si hay una instalación custom seleccionada, sino usar server ID
+            const selectedInstallId = ConfigManager.getSelectedInstallation()
+            sFnOpts.push(selectedInstallId || ConfigManager.getSelectedServer())
         }
         if(typeof sFn === 'function'){
             if(v.tagName === 'INPUT'){
@@ -348,6 +456,7 @@ document.getElementById('settingsAddMojangAccount').onclick = (e) => {
         loginViewOnCancel = VIEWS.settings
         loginViewOnSuccess = VIEWS.settings
         loginCancelEnabled(true)
+        showNormalLogin()
     })
 }
 
@@ -355,6 +464,16 @@ document.getElementById('settingsAddMojangAccount').onclick = (e) => {
 document.getElementById('settingsAddMicrosoftAccount').onclick = (e) => {
     switchView(getCurrentView(), VIEWS.waiting, 500, 500, () => {
         ipcRenderer.send(MSFT_OPCODE.OPEN_LOGIN, VIEWS.settings, VIEWS.settings)
+    })
+}
+
+// Bind the add offline account button.
+document.getElementById('settingsAddOfflineAccount').onclick = (e) => {
+    switchView(getCurrentView(), VIEWS.login, 500, 500, () => {
+        loginViewOnCancel = VIEWS.settings
+        loginViewOnSuccess = VIEWS.settings
+        loginCancelEnabled(true)
+        showOfflineLogin()
     })
 }
 
@@ -518,7 +637,27 @@ function processLogOut(val, isLastAccount){
         switchView(getCurrentView(), VIEWS.waiting, 500, 500, () => {
             ipcRenderer.send(MSFT_OPCODE.OPEN_LOGOUT, uuid, isLastAccount)
         })
+    } else if(targetAcc.type === 'offline') {
+        // Handle offline account logout
+        AuthManager.removeOfflineAccount(uuid).then(() => {
+            if(!isLastAccount && uuid === prevSelAcc.uuid){
+                const selAcc = ConfigManager.getSelectedAccount()
+                refreshAuthAccountSelected(selAcc.uuid)
+                updateSelectedAccount(selAcc)
+                validateSelectedAccount()
+            }
+            if(isLastAccount) {
+                loginOptionsCancelEnabled(false)
+                loginOptionsViewOnLoginSuccess = VIEWS.settings
+                loginOptionsViewOnLoginCancel = VIEWS.loginOptions
+                switchView(getCurrentView(), VIEWS.loginOptions)
+            }
+        })
+        $(parent).fadeOut(250, () => {
+            parent.remove()
+        })
     } else {
+        // Mojang account
         AuthManager.removeMojangAccount(uuid).then(() => {
             if(!isLastAccount && uuid === prevSelAcc.uuid){
                 const selAcc = ConfigManager.getSelectedAccount()
@@ -634,19 +773,35 @@ function populateAuthAccounts(){
 
     let microsoftAuthAccountStr = ''
     let mojangAuthAccountStr = ''
+    let offlineAuthAccountStr = ''
 
     authKeys.forEach((val) => {
         const acc = authAccounts[val]
 
+        // Determine account type badge and image source
+        let accountTypeBadge = ''
+        let accountImage = ''
+        
+        if(acc.type === 'microsoft') {
+            accountTypeBadge = '<span class="settingsAuthAccountBadge badgeMicrosoft">Microsoft</span>'
+            accountImage = `https://mc-heads.net/body/${acc.uuid}/60`
+        } else if(acc.type === 'mojang') {
+            accountTypeBadge = '<span class="settingsAuthAccountBadge badgeMojang">Mojang</span>'
+            accountImage = `https://mc-heads.net/body/${acc.uuid}/60`
+        } else if(acc.type === 'offline') {
+            accountTypeBadge = '<span class="settingsAuthAccountBadge badgeOffline">Offline</span>'
+            accountImage = `https://mc-heads.net/avatar/${acc.uuid}/60`
+        }
+
         const accHtml = `<div class="settingsAuthAccount" uuid="${acc.uuid}">
             <div class="settingsAuthAccountLeft">
-                <img class="settingsAuthAccountImage" alt="${acc.displayName}" src="https://mc-heads.net/body/${acc.uuid}/60">
+                <img class="settingsAuthAccountImage" alt="${acc.displayName}" src="${accountImage}">
             </div>
             <div class="settingsAuthAccountRight">
                 <div class="settingsAuthAccountDetails">
                     <div class="settingsAuthAccountDetailPane">
                         <div class="settingsAuthAccountDetailTitle">${Lang.queryJS('settings.authAccountPopulate.username')}</div>
-                        <div class="settingsAuthAccountDetailValue">${acc.displayName}</div>
+                        <div class="settingsAuthAccountDetailValue">${acc.displayName} ${accountTypeBadge}</div>
                     </div>
                     <div class="settingsAuthAccountDetailPane">
                         <div class="settingsAuthAccountDetailTitle">${Lang.queryJS('settings.authAccountPopulate.uuid')}</div>
@@ -664,6 +819,8 @@ function populateAuthAccounts(){
 
         if(acc.type === 'microsoft') {
             microsoftAuthAccountStr += accHtml
+        } else if(acc.type === 'offline') {
+            offlineAuthAccountStr += accHtml
         } else {
             mojangAuthAccountStr += accHtml
         }
@@ -672,6 +829,14 @@ function populateAuthAccounts(){
 
     settingsCurrentMicrosoftAccounts.innerHTML = microsoftAuthAccountStr
     settingsCurrentMojangAccounts.innerHTML = mojangAuthAccountStr
+    
+    // Add offline accounts section if there are offline accounts
+    if(offlineAuthAccountStr !== '') {
+        const offlineContainer = document.getElementById('settingsCurrentOfflineAccounts')
+        if(offlineContainer) {
+            offlineContainer.innerHTML = offlineAuthAccountStr
+        }
+    }
 }
 
 /**
@@ -711,6 +876,14 @@ const settingsModsContainer = document.getElementById('settingsModsContainer')
  * Resolve and update the mods on the UI.
  */
 async function resolveModsForUI(){
+    // Si hay una instalación custom seleccionada, no tiene mods de distribución
+    const selectedInstallId = ConfigManager.getSelectedInstallation()
+    if(selectedInstallId) {
+        document.getElementById('settingsReqModsContent').innerHTML = ''
+        document.getElementById('settingsOptModsContent').innerHTML = ''
+        return
+    }
+    
     const serv = ConfigManager.getSelectedServer()
 
     const distro = await DistroAPI.getDistribution()
@@ -816,6 +989,12 @@ function bindModsToggleSwitch(){
  * Save the mod configuration based on the UI values.
  */
 function saveModConfiguration(){
+    // Si hay instalación custom seleccionada, no hay mods de distribución para guardar
+    const selectedInstallId = ConfigManager.getSelectedInstallation()
+    if(selectedInstallId) {
+        return
+    }
+    
     const serv = ConfigManager.getSelectedServer()
     const modConf = ConfigManager.getModConfiguration(serv)
     modConf.mods = _saveModConfiguration(modConf.mods)
@@ -856,9 +1035,24 @@ let CACHE_DROPIN_MODS
  * populate the results onto the UI.
  */
 async function resolveDropinModsForUI(){
-    const serv = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
-    CACHE_SETTINGS_MODS_DIR = path.join(ConfigManager.getInstanceDirectory(), serv.rawServer.id, 'mods')
-    CACHE_DROPIN_MODS = DropinModUtil.scanForDropinMods(CACHE_SETTINGS_MODS_DIR, serv.rawServer.minecraftVersion)
+    // Detectar si hay instalación custom o servidor
+    const selectedInstallId = ConfigManager.getSelectedInstallation()
+    let instanceId, minecraftVersion
+    
+    if(selectedInstallId) {
+        // Instalación custom
+        const installation = ConfigManager.getInstallation(selectedInstallId)
+        instanceId = installation.id
+        minecraftVersion = installation.version
+    } else {
+        // Servidor de distribución
+        const serv = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
+        instanceId = serv.rawServer.id
+        minecraftVersion = serv.rawServer.minecraftVersion
+    }
+    
+    CACHE_SETTINGS_MODS_DIR = path.join(ConfigManager.getInstanceDirectory(), instanceId, 'mods')
+    CACHE_DROPIN_MODS = DropinModUtil.scanForDropinMods(CACHE_SETTINGS_MODS_DIR, minecraftVersion)
 
     let dropinMods = ''
 
@@ -945,6 +1139,12 @@ function bindDropinModFileSystemButton(){
  * of adding/removing the .disabled extension.
  */
 function saveDropinModConfiguration(){
+    // Validar que CACHE_DROPIN_MODS esté inicializado
+    if(!CACHE_DROPIN_MODS || !Array.isArray(CACHE_DROPIN_MODS)){
+        CACHE_DROPIN_MODS = []
+        return
+    }
+    
     for(dropin of CACHE_DROPIN_MODS){
         const dropinUI = document.getElementById(dropin.fullName)
         if(dropinUI != null){
@@ -995,8 +1195,21 @@ let CACHE_SELECTED_SHADERPACK
  * Load shaderpack information.
  */
 async function resolveShaderpacksForUI(){
-    const serv = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
-    CACHE_SETTINGS_INSTANCE_DIR = path.join(ConfigManager.getInstanceDirectory(), serv.rawServer.id)
+    // Detectar si hay instalación custom o servidor
+    const selectedInstallId = ConfigManager.getSelectedInstallation()
+    let instanceId
+    
+    if(selectedInstallId) {
+        // Instalación custom
+        const installation = ConfigManager.getInstallation(selectedInstallId)
+        instanceId = installation.id
+    } else {
+        // Servidor de distribución
+        const serv = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
+        instanceId = serv.rawServer.id
+    }
+    
+    CACHE_SETTINGS_INSTANCE_DIR = path.join(ConfigManager.getInstanceDirectory(), instanceId)
     CACHE_SHADERPACKS = DropinModUtil.scanForShaderpacks(CACHE_SETTINGS_INSTANCE_DIR)
     CACHE_SELECTED_SHADERPACK = DropinModUtil.getEnabledShaderpack(CACHE_SETTINGS_INSTANCE_DIR)
 
@@ -1027,9 +1240,14 @@ function setShadersOptions(arr, selected){
 }
 
 function saveShaderpackSettings(){
+    const shadersOptions = document.getElementById('settingsShadersOptions')
+    if(!shadersOptions || !CACHE_SETTINGS_INSTANCE_DIR){
+        return
+    }
+    
     let sel = 'OFF'
-    for(let opt of document.getElementById('settingsShadersOptions').childNodes){
-        if(opt.hasAttribute('selected')){
+    for(let opt of shadersOptions.children){
+        if(opt.hasAttribute && opt.hasAttribute('selected')){
             sel = opt.getAttribute('value')
         }
     }
@@ -1071,18 +1289,50 @@ function bindShaderpackButton() {
  * Load the currently selected server information onto the mods tab.
  */
 async function loadSelectedServerOnModsTab(){
-    const serv = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
+    // Detectar si hay instalación custom seleccionada
+    const selectedInstallId = ConfigManager.getSelectedInstallation()
+    let displayData
+    
+    if(selectedInstallId) {
+        // Usar datos de la instalación custom
+        const installation = ConfigManager.getInstallation(selectedInstallId)
+        const loaderText = installation.loader === 'vanilla' ? 'Vanilla' : 
+                          installation.loader === 'forge' ? `Forge ${installation.loaderVersion}` :
+                          installation.loader === 'fabric' ? `Fabric ${installation.loaderVersion}` :
+                          installation.loader === 'quilt' ? `Quilt ${installation.loaderVersion}` :
+                          installation.loader === 'neoforge' ? `NeoForge ${installation.loaderVersion}` : installation.loader
+        
+        displayData = {
+            icon: 'assets/images/icons/sevenstar_circle.svg',
+            name: installation.name,
+            description: `${loaderText} - MC ${installation.version}`,
+            minecraftVersion: installation.version,
+            version: installation.loader,
+            mainServer: false
+        }
+    } else {
+        // Usar servidor de distribución
+        const serv = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
+        displayData = {
+            icon: serv.rawServer.icon,
+            name: serv.rawServer.name,
+            description: serv.rawServer.description,
+            minecraftVersion: serv.rawServer.minecraftVersion,
+            version: serv.rawServer.version,
+            mainServer: serv.rawServer.mainServer
+        }
+    }
 
     for(const el of document.getElementsByClassName('settingsSelServContent')) {
         el.innerHTML = `
-            <img class="serverListingImg" src="${serv.rawServer.icon}"/>
+            <img class="serverListingImg" src="${displayData.icon}"/>
             <div class="serverListingDetails">
-                <span class="serverListingName">${serv.rawServer.name}</span>
-                <span class="serverListingDescription">${serv.rawServer.description}</span>
+                <span class="serverListingName">${displayData.name}</span>
+                <span class="serverListingDescription">${displayData.description}</span>
                 <div class="serverListingInfo">
-                    <div class="serverListingVersion">${serv.rawServer.minecraftVersion}</div>
-                    <div class="serverListingRevision">${serv.rawServer.version}</div>
-                    ${serv.rawServer.mainServer ? `<div class="serverListingStarWrapper">
+                    <div class="serverListingVersion">${displayData.minecraftVersion}</div>
+                    <div class="serverListingRevision">${displayData.version}</div>
+                    ${displayData.mainServer ? `<div class="serverListingStarWrapper">
                         <svg id="Layer_1" viewBox="0 0 107.45 104.74" width="20px" height="20px">
                             <defs>
                                 <style>.cls-1{fill:#fff;}.cls-2{fill:none;stroke:#fff;stroke-miterlimit:10;}</style>
@@ -1130,6 +1380,22 @@ function animateSettingsTabRefresh(){
  * Prepare the Mods tab for display.
  */
 async function prepareModsTab(first){
+    // Si hay instalación custom, ocultar el tab de Mods ya que no aplica
+    const selectedInstallId = ConfigManager.getSelectedInstallation()
+    const modsTab = document.getElementById('settingsTabMods')
+    const modsNavItem = document.querySelector('[forTab="settingsTabMods"]')
+    
+    if(selectedInstallId) {
+        // Ocultar tab de Mods para instalaciones custom
+        if(modsTab) modsTab.style.display = 'none'
+        if(modsNavItem) modsNavItem.style.display = 'none'
+        return
+    } else {
+        // Mostrar tab de Mods para servidores TECNILAND
+        if(modsTab) modsTab.style.display = ''
+        if(modsNavItem) modsNavItem.style.display = ''
+    }
+    
     await resolveModsForUI()
     await resolveDropinModsForUI()
     await resolveShaderpacksForUI()
@@ -1336,9 +1602,39 @@ function populateMemoryStatus(){
  * @param {string} execPath The executable path to populate against.
  */
 async function populateJavaExecDetails(execPath){
-    const server = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
+    // Verificar si hay una instalación personalizada seleccionada
+    const selectedInstallId = ConfigManager.getSelectedInstallation()
+    let effectiveJavaOptions
+    
+    if(selectedInstallId) {
+        // Obtener javaOptions de la instalación personalizada
+        const installation = ConfigManager.getInstallation(selectedInstallId)
+        if(installation && installation.javaOptions) {
+            effectiveJavaOptions = installation.javaOptions
+        } else {
+            // Valores por defecto si no están configurados
+            effectiveJavaOptions = {
+                supported: '>=8.x',
+                suggestedMajor: 8,
+                distribution: 'ADOPTIUM'
+            }
+        }
+    } else {
+        // Obtener del servidor de distribución tradicional
+        const server = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
+        if(server) {
+            effectiveJavaOptions = server.effectiveJavaOptions
+        } else {
+            // Fallback por defecto
+            effectiveJavaOptions = {
+                supported: '>=8.x',
+                suggestedMajor: 8,
+                distribution: 'ADOPTIUM'
+            }
+        }
+    }
 
-    const details = await validateSelectedJvm(ensureJavaDirIsRoot(execPath), server.effectiveJavaOptions.supported)
+    const details = await validateSelectedJvm(ensureJavaDirIsRoot(execPath), effectiveJavaOptions.supported)
 
     if(details != null) {
         settingsJavaExecDetails.innerHTML = Lang.queryJS('settings.java.selectedJava', { version: details.semverStr, vendor: details.vendor })
@@ -1347,12 +1643,12 @@ async function populateJavaExecDetails(execPath){
     }
 }
 
-function populateJavaReqDesc(server) {
-    settingsJavaReqDesc.innerHTML = Lang.queryJS('settings.java.requiresJava', { major: server.effectiveJavaOptions.suggestedMajor })
+function populateJavaReqDesc(effectiveJavaOptions) {
+    settingsJavaReqDesc.innerHTML = Lang.queryJS('settings.java.requiresJava', { major: effectiveJavaOptions.suggestedMajor })
 }
 
-function populateJvmOptsLink(server) {
-    const major = server.effectiveJavaOptions.suggestedMajor
+function populateJvmOptsLink(effectiveJavaOptions) {
+    const major = effectiveJavaOptions.suggestedMajor
     settingsJvmOptsLink.innerHTML = Lang.queryJS('settings.java.availableOptions', { major: major })
     if(major >= 12) {
         settingsJvmOptsLink.href = `https://docs.oracle.com/en/java/javase/${major}/docs/specs/man/java.html#extra-options-for-java`
@@ -1368,10 +1664,10 @@ function populateJvmOptsLink(server) {
     }
 }
 
-function bindMinMaxRam(server) {
+function bindMinMaxRam(javaOptions) {
     // Store maximum memory values.
-    const SETTINGS_MAX_MEMORY = ConfigManager.getAbsoluteMaxRAM(server.rawServer.javaOptions?.ram)
-    const SETTINGS_MIN_MEMORY = ConfigManager.getAbsoluteMinRAM(server.rawServer.javaOptions?.ram)
+    const SETTINGS_MAX_MEMORY = ConfigManager.getAbsoluteMaxRAM(javaOptions?.ram)
+    const SETTINGS_MIN_MEMORY = ConfigManager.getAbsoluteMinRAM(javaOptions?.ram)
 
     // Set the max and min values for the ranged sliders.
     settingsMaxRAMRange.setAttribute('max', SETTINGS_MAX_MEMORY)
@@ -1384,12 +1680,40 @@ function bindMinMaxRam(server) {
  * Prepare the Java tab for display.
  */
 async function prepareJavaTab(){
-    const server = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
-    bindMinMaxRam(server)
-    bindRangeSlider(server)
+    // Poblar información del servidor/instalación seleccionada
+    await loadSelectedServerOnModsTab()
+    
+    // Obtener effectiveJavaOptions y javaOptions dependiendo del tipo de selección
+    const selectedInstallId = ConfigManager.getSelectedInstallation()
+    let effectiveJavaOptions, javaOptions
+    
+    if(selectedInstallId) {
+        // Instalación custom
+        const installation = ConfigManager.getInstallation(selectedInstallId)
+        if(installation && installation.javaOptions) {
+            effectiveJavaOptions = installation.javaOptions
+            javaOptions = installation.javaOptions
+        } else {
+            // Valores por defecto para instalaciones custom
+            effectiveJavaOptions = {
+                supported: '>=8.x',
+                suggestedMajor: 8,
+                distribution: 'ADOPTIUM'
+            }
+            javaOptions = effectiveJavaOptions
+        }
+    } else {
+        // Servidor de distribución
+        const server = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
+        effectiveJavaOptions = server.effectiveJavaOptions
+        javaOptions = server.rawServer.javaOptions
+    }
+    
+    bindMinMaxRam(javaOptions)
+    bindRangeSlider()
     populateMemoryStatus()
-    populateJavaReqDesc(server)
-    populateJvmOptsLink(server)
+    populateJavaReqDesc(effectiveJavaOptions)
+    populateJvmOptsLink(effectiveJavaOptions)
 }
 
 /**

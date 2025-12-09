@@ -1,13 +1,13 @@
 {
-  "name": "helioslauncher",
-  "version": "2.2.1",
-  "productName": "Helios Launcher",
-  "description": "Modded Minecraft Launcher",
-  "author": "Daniel Scalzi (https://github.com/dscalzi/)",
-  "license": "UNLICENSED",
-  "homepage": "https://github.com/dscalzi/HeliosLauncher",
+  "name": "tecniland-nexus",
+  "version": "1.0.0",
+  "productName": "TECNILAND Nexus",
+  "description": "Launcher personalizado para TECNILAND",
+  "author": "TECNILAND by Ppkeash",
+  "license": "MIT",
+  "homepage": "https://github.com/Ppkeash/TECNILAND-Nexus",
   "bugs": {
-    "url": "https://github.com/dscalzi/HeliosLauncher/issues"
+    "url": "https://github.com/Ppkeash/TECNILAND-Nexus/issues"
   },
   "private": true,
   "main": "index.js",
@@ -25,6 +25,7 @@
   "dependencies": {
     "@electron/remote": "^2.1.2",
     "adm-zip": "^0.5.16",
+    "axios": "^1.13.2",
     "discord-rpc-patch": "^4.0.1",
     "ejs": "^3.1.10",
     "ejs-electron": "^3.0.0",

@@ -7,7 +7,8 @@ const logger = LoggerUtil.getLogger('ConfigManager')
 
 const sysRoot = process.env.APPDATA || (process.platform == 'darwin' ? process.env.HOME + '/Library/Application Support' : process.env.HOME)
 
-const dataPath = path.join(sysRoot, '.helioslauncher')
+// Data directory changed from .helioslauncher to .tecnilandnexus
+const dataPath = path.join(sysRoot, '.tecnilandnexus')
 
 const launcherDir = require('@electron/remote').app.getPath('userData')
 
@@ -86,7 +87,10 @@ const DEFAULT_CONFIG = {
         },
         launcher: {
             allowPrerelease: false,
-            dataDirectory: dataPath
+            showLegacyVersions: false,
+            showLiveLogs: false,
+            dataDirectory: dataPath,
+            language: 'es_ES'
         }
     },
     newsCache: {
@@ -99,7 +103,9 @@ const DEFAULT_CONFIG = {
     selectedAccount: null,
     authenticationDatabase: {},
     modConfigurations: [],
-    javaConfig: {}
+    javaConfig: {},
+    installations: [],
+    selectedInstallation: null
 }
 
 let config = null
@@ -402,6 +408,44 @@ exports.addMicrosoftAuthAccount = function(uuid, accessToken, name, mcExpires, m
 }
 
 /**
+ * Adds an offline account to the database to be stored.
+ * Offline accounts can be used to play on cracked/offline servers.
+ * 
+ * @param {string} uuid The uuid of the offline account (generated from username).
+ * @param {string} username The username for the offline account.
+ * @param {string} displayName Optional display name, defaults to username.
+ * 
+ * @returns {Object} The offline account object created by this action.
+ */
+exports.addOfflineAccount = function(uuid, username, displayName = null) {
+    config.selectedAccount = uuid
+    config.authenticationDatabase[uuid] = {
+        type: 'offline',
+        username: username.trim(),
+        uuid: uuid.trim(),
+        displayName: (displayName || username).trim(),
+        // Offline accounts don't need tokens
+        accessToken: '0'
+    }
+    return config.authenticationDatabase[uuid]
+}
+
+/**
+ * Get all offline accounts from the database.
+ * 
+ * @returns {Array<Object>} Array of offline account objects.
+ */
+exports.getOfflineAccounts = function() {
+    const offlineAccounts = []
+    for (const uuid in config.authenticationDatabase) {
+        if (config.authenticationDatabase[uuid].type === 'offline') {
+            offlineAccounts.push(config.authenticationDatabase[uuid])
+        }
+    }
+    return offlineAccounts
+}
+
+/**
  * Remove an authenticated account from the database. If the account
  * was also the selected account, a new one will be selected. If there
  * are no accounts, the selected account will be null.
@@ -483,7 +527,11 @@ exports.getModConfiguration = function(serverid){
             return cfgs[i]
         }
     }
-    return null
+    // Si no existe configuración, devolver una vacía por defecto (para instalaciones personalizadas)
+    return {
+        id: serverid,
+        mods: {}
+    }
 }
 
 /**
@@ -566,7 +614,10 @@ exports.ensureJavaConfig = function(serverid, effectiveJavaOptions, ram) {
  * @returns {string} The minimum amount of memory for JVM initialization.
  */
 exports.getMinRAM = function(serverid){
-    return config.javaConfig[serverid].minRAM
+    if(!config.javaConfig[serverid]){
+        config.javaConfig[serverid] = {}
+    }
+    return config.javaConfig[serverid].minRAM || '3G'
 }
 
 /**
@@ -578,6 +629,9 @@ exports.getMinRAM = function(serverid){
  * @param {string} minRAM The new minimum amount of memory for JVM initialization.
  */
 exports.setMinRAM = function(serverid, minRAM){
+    if(!config.javaConfig[serverid]){
+        config.javaConfig[serverid] = {}
+    }
     config.javaConfig[serverid].minRAM = minRAM
 }
 
@@ -590,7 +644,10 @@ exports.setMinRAM = function(serverid, minRAM){
  * @returns {string} The maximum amount of memory for JVM initialization.
  */
 exports.getMaxRAM = function(serverid){
-    return config.javaConfig[serverid].maxRAM
+    if(!config.javaConfig[serverid]){
+        config.javaConfig[serverid] = {}
+    }
+    return config.javaConfig[serverid].maxRAM || '3G'
 }
 
 /**
@@ -602,6 +659,9 @@ exports.getMaxRAM = function(serverid){
  * @param {string} maxRAM The new maximum amount of memory for JVM initialization.
  */
 exports.setMaxRAM = function(serverid, maxRAM){
+    if(!config.javaConfig[serverid]){
+        config.javaConfig[serverid] = {}
+    }
     config.javaConfig[serverid].maxRAM = maxRAM
 }
 
@@ -614,6 +674,9 @@ exports.setMaxRAM = function(serverid, maxRAM){
  * @returns {string} The path of the Java Executable.
  */
 exports.getJavaExecutable = function(serverid){
+    if(!config.javaConfig[serverid]){
+        config.javaConfig[serverid] = {}
+    }
     return config.javaConfig[serverid].executable
 }
 
@@ -624,6 +687,9 @@ exports.getJavaExecutable = function(serverid){
  * @param {string} executable The new path of the Java Executable.
  */
 exports.setJavaExecutable = function(serverid, executable){
+    if(!config.javaConfig[serverid]){
+        config.javaConfig[serverid] = {}
+    }
     config.javaConfig[serverid].executable = executable
 }
 
@@ -636,7 +702,10 @@ exports.setJavaExecutable = function(serverid, executable){
  * @returns {Array.<string>} An array of the additional arguments for JVM initialization.
  */
 exports.getJVMOptions = function(serverid){
-    return config.javaConfig[serverid].jvmOptions
+    if(!config.javaConfig[serverid]){
+        config.javaConfig[serverid] = {}
+    }
+    return config.javaConfig[serverid].jvmOptions || []
 }
 
 /**
@@ -649,6 +718,9 @@ exports.getJVMOptions = function(serverid){
  * initialization.
  */
 exports.setJVMOptions = function(serverid, jvmOptions){
+    if(!config.javaConfig[serverid]){
+        config.javaConfig[serverid] = {}
+    }
     config.javaConfig[serverid].jvmOptions = jvmOptions
 }
 
@@ -790,4 +862,221 @@ exports.getAllowPrerelease = function(def = false){
  */
 exports.setAllowPrerelease = function(allowPrerelease){
     config.settings.launcher.allowPrerelease = allowPrerelease
+}
+
+/**
+ * Check if the launcher should show legacy Minecraft versions (< 1.13).
+ * Legacy versions are hidden by default because Forge support starts at 1.13.
+ * 
+ * @param {boolean} def Optional. If true, the default value will be returned.
+ * @returns {boolean} Whether or not the launcher should show legacy versions.
+ */
+exports.getShowLegacyVersions = function(def = false){
+    return !def ? (config.settings.launcher.showLegacyVersions ?? false) : DEFAULT_CONFIG.settings.launcher.showLegacyVersions
+}
+
+/**
+ * Change the status of whether or not the launcher should show legacy Minecraft versions.
+ * 
+ * @param {boolean} showLegacy Whether or not the launcher should show legacy versions (< 1.13).
+ */
+exports.setShowLegacyVersions = function(showLegacy){
+    config.settings.launcher.showLegacyVersions = showLegacy
+}
+
+/**
+ * Check if the launcher should show live Minecraft logs during gameplay.
+ * When enabled, displays a split-panel with real-time stdout/stderr output.
+ * 
+ * @param {boolean} def Optional. If true, the default value will be returned.
+ * @returns {boolean} Whether or not live logs should be shown.
+ */
+exports.getShowLiveLogs = function(def = false){
+    return !def ? (config.settings.launcher.showLiveLogs ?? false) : DEFAULT_CONFIG.settings.launcher.showLiveLogs
+}
+
+/**
+ * Change the status of whether or not the launcher should show live Minecraft logs.
+ * 
+ * @param {boolean} showLiveLogs Whether or not live logs should be displayed.
+ */
+exports.setShowLiveLogs = function(showLiveLogs){
+    config.settings.launcher.showLiveLogs = showLiveLogs
+}
+
+/**
+ * Check if experimental loaders (Fabric, Quilt, NeoForge) should be shown.
+ * 
+ * @param {boolean} def Optional. If true, the default value will be returned.
+ * @returns {boolean} Whether or not experimental loaders are enabled.
+ */
+exports.getExperimentalLoaders = function(def = false){
+    return !def ? (config.settings.launcher.experimentalLoaders ?? false) : false
+}
+
+/**
+ * Change the status of whether experimental loaders should be shown.
+ * 
+ * @param {boolean} experimentalLoaders Whether or not experimental loaders should be shown.
+ */
+exports.setExperimentalLoaders = function(experimentalLoaders){
+    config.settings.launcher.experimentalLoaders = experimentalLoaders
+}
+
+/**
+ * Get the selected language for the launcher.
+ * 
+ * @param {boolean} def Optional. If true, the default value will be returned.
+ * @returns {string} The language code (e.g., 'es_ES', 'en_US').
+ */
+exports.getLanguage = function(def = false){
+    const lang = !def ? config.settings.launcher.language : DEFAULT_CONFIG.settings.launcher.language
+    // If language is not set or empty, return default
+    if (!lang || lang === '') {
+        return DEFAULT_CONFIG.settings.launcher.language
+    }
+    return lang
+}
+
+/**
+ * Set the selected language for the launcher.
+ * 
+ * @param {string} language The language code (e.g., 'es_ES', 'en_US').
+ */
+exports.setLanguage = function(language){
+    config.settings.launcher.language = language
+}
+
+// Installation Management
+
+/**
+ * Get all custom installations.
+ * 
+ * @returns {Array} Array of installation objects.
+ */
+exports.getInstallations = function(){
+    return config.installations || []
+}
+
+/**
+ * Add a new custom installation.
+ * 
+ * @param {Object} installation The installation object to add.
+ * @returns {boolean} True if successful, false if installation with same ID already exists.
+ */
+exports.addInstallation = function(installation){
+    if (!config.installations) {
+        config.installations = []
+    }
+    
+    // Check for duplicate ID
+    if (config.installations.some(inst => inst.id === installation.id)) {
+        logger.error(`Installation with ID ${installation.id} already exists`)
+        return false
+    }
+    
+    config.installations.push(installation)
+    logger.info(`Installation added: ${installation.name} (${installation.id})`)
+    return true
+}
+
+/**
+ * Update an existing installation.
+ * 
+ * @param {string} id The ID of the installation to update.
+ * @param {Object} updates Object containing fields to update.
+ * @returns {boolean} True if successful, false if installation not found.
+ */
+exports.updateInstallation = function(id, updates){
+    if (!config.installations) {
+        config.installations = []
+    }
+    
+    const index = config.installations.findIndex(inst => inst.id === id)
+    if (index === -1) {
+        logger.error(`Installation with ID ${id} not found`)
+        return false
+    }
+    
+    // Merge updates with existing installation
+    config.installations[index] = { ...config.installations[index], ...updates }
+    logger.info(`Installation updated: ${id}`)
+    return true
+}
+
+/**
+ * Delete an installation and optionally its instance folder.
+ * 
+ * @param {string} id The ID of the installation to delete.
+ * @param {boolean} deleteFolder Whether to delete the instance folder (default: true).
+ * @returns {boolean} True if successful, false if installation not found.
+ */
+exports.deleteInstallation = function(id, deleteFolder = true){
+    if (!config.installations) {
+        config.installations = []
+    }
+    
+    const index = config.installations.findIndex(inst => inst.id === id)
+    if (index === -1) {
+        logger.error(`Installation with ID ${id} not found`)
+        return false
+    }
+    
+    const installation = config.installations[index]
+    const name = installation.name
+    
+    // Delete instance folder if requested
+    if (deleteFolder) {
+        const instancePath = path.join(exports.getInstanceDirectory(), id)
+        try {
+            if (fs.existsSync(instancePath)) {
+                fs.removeSync(instancePath)
+                logger.info(`Instance folder deleted: ${instancePath}`)
+            }
+        } catch (err) {
+            logger.warn(`Failed to delete instance folder: ${err.message}`)
+        }
+    }
+    
+    config.installations.splice(index, 1)
+    
+    // Clear selected installation if it was deleted
+    if (config.selectedInstallation === id) {
+        config.selectedInstallation = null
+    }
+    
+    logger.info(`Installation deleted: ${name} (${id})`)
+    return true
+}
+
+/**
+ * Get a specific installation by ID.
+ * 
+ * @param {string} id The ID of the installation.
+ * @returns {Object|null} The installation object or null if not found.
+ */
+exports.getInstallation = function(id){
+    if (!config.installations) {
+        config.installations = []
+    }
+    
+    return config.installations.find(inst => inst.id === id) || null
+}
+
+/**
+ * Get the selected installation ID.
+ * 
+ * @returns {string|null} The ID of the selected installation or null.
+ */
+exports.getSelectedInstallation = function(){
+    return config.selectedInstallation || null
+}
+
+/**
+ * Set the selected installation.
+ * 
+ * @param {string|null} installationId The ID of the installation to select, or null to clear.
+ */
+exports.setSelectedInstallation = function(installationId){
+    config.selectedInstallation = installationId
 }

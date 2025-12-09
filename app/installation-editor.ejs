@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="<%- lang %>" landing>
+    <head>
+        <meta charset="utf-8" http-equiv="Content-Security-Policy" content="script-src 'self' 'sha256-In6B8teKZQll5heMl9bS7CESTbGvnANxokMFz91ZFDU='">
+        <title><%- htmlWebpackPlugin.options.makeTitle('Editor de Instalación', 'Installation Editor') %></title>
+        <script src="./assets/js/scripts/installation-editor.js"></script>
+        <style>
+            /* Reset */
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                color: #ffffff;
+                height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+            }
+
+            /* Container principal */
+            .editor-container {
+                background: rgba(0, 0, 0, 0.7);
+                border-radius: 12px;
+                padding: 40px;
+                width: 600px;
+                max-width: 90vw;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            /* Header */
+            .editor-header {
+                text-align: center;
+                margin-bottom: 30px;
+            }
+
+            .editor-title {
+                font-size: 28px;
+                font-weight: 600;
+                margin-bottom: 8px;
+                color: #ffffff;
+            }
+
+            .editor-subtitle {
+                font-size: 14px;
+                color: rgba(255, 255, 255, 0.7);
+            }
+
+            /* Form */
+            .form-group {
+                margin-bottom: 25px;
+            }
+
+            .form-label {
+                display: block;
+                font-size: 14px;
+                font-weight: 500;
+                margin-bottom: 8px;
+                color: rgba(255, 255, 255, 0.9);
+            }
+
+            .form-input {
+                width: 100%;
+                padding: 12px 16px;
+                background: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 8px;
+                color: #ffffff;
+                font-size: 14px;
+                transition: all 0.3s ease;
+            }
+
+            .form-input:focus {
+                outline: none;
+                background: rgba(255, 255, 255, 0.15);
+                border-color: #4a90e2;
+                box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.2);
+            }
+
+            .form-input::placeholder {
+                color: rgba(255, 255, 255, 0.5);
+            }
+
+            /* Loader Selector */
+            .loader-selector {
+                display: grid;
+                grid-template-columns: repeat(5, 1fr);
+                gap: 10px;
+                margin-top: 10px;
+            }
+
+            .loader-btn {
+                padding: 12px 8px;
+                background: rgba(255, 255, 255, 0.1);
+                border: 2px solid rgba(255, 255, 255, 0.2);
+                border-radius: 8px;
+                color: rgba(255, 255, 255, 0.7);
+                font-size: 12px;
+                font-weight: 600;
+                text-transform: uppercase;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                text-align: center;
+            }
+
+            .loader-btn:hover {
+                background: rgba(255, 255, 255, 0.15);
+                border-color: rgba(255, 255, 255, 0.4);
+                transform: translateY(-2px);
+            }
+
+            .loader-btn.active {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                border-color: #667eea;
+                color: #ffffff;
+                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            }
+
+            /* Dropdown */
+            .form-select {
+                width: 100%;
+                padding: 12px 16px;
+                background: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 8px;
+                color: #ffffff;
+                font-size: 14px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                appearance: none;
+                background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+                background-repeat: no-repeat;
+                background-position: right 12px center;
+                background-size: 16px;
+                padding-right: 40px;
+            }
+
+            .form-select:focus {
+                outline: none;
+                background-color: rgba(255, 255, 255, 0.15);
+                border-color: #4a90e2;
+                box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.2);
+            }
+
+            .form-select option {
+                background: #1e3c72;
+                color: #ffffff;
+            }
+
+            .form-select:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+
+            /* Loading spinner */
+            .loading-spinner {
+                display: inline-block;
+                width: 16px;
+                height: 16px;
+                border: 2px solid rgba(255, 255, 255, 0.3);
+                border-top-color: #ffffff;
+                border-radius: 50%;
+                animation: spin 0.8s linear infinite;
+                margin-right: 8px;
+                vertical-align: middle;
+            }
+
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+
+            /* Buttons */
+            .button-group {
+                display: flex;
+                gap: 12px;
+                margin-top: 30px;
+            }
+
+            .btn {
+                flex: 1;
+                padding: 14px 24px;
+                border: none;
+                border-radius: 8px;
+                font-size: 15px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+
+            .btn-primary {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: #ffffff;
+                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            }
+
+            .btn-primary:hover:not(:disabled) {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 16px rgba(102, 126, 234, 0.6);
+            }
+
+            .btn-primary:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+
+            .btn-secondary {
+                background: rgba(255, 255, 255, 0.1);
+                color: #ffffff;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+
+            .btn-secondary:hover {
+                background: rgba(255, 255, 255, 0.15);
+                transform: translateY(-2px);
+            }
+
+            /* Error message */
+            .error-message {
+                background: rgba(231, 76, 60, 0.2);
+                border: 1px solid rgba(231, 76, 60, 0.5);
+                border-radius: 8px;
+                padding: 12px 16px;
+                margin-bottom: 20px;
+                color: #ff6b6b;
+                font-size: 14px;
+                display: none;
+            }
+
+            .error-message.show {
+                display: block;
+                animation: slideDown 0.3s ease;
+            }
+
+            @keyframes slideDown {
+                from {
+                    opacity: 0;
+                    transform: translateY(-10px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+
+            /* Helper text */
+            .helper-text {
+                font-size: 12px;
+                color: rgba(255, 255, 255, 0.6);
+                margin-top: 6px;
+                font-style: italic;
+            }
+
+            /* Icon badges para loaders */
+            .loader-btn::before {
+                content: '';
+                display: block;
+                width: 24px;
+                height: 24px;
+                margin: 0 auto 6px;
+                background-size: contain;
+                background-repeat: no-repeat;
+                background-position: center;
+                opacity: 0.7;
+                transition: opacity 0.3s ease;
+            }
+
+            .loader-btn.active::before,
+            .loader-btn:hover::before {
+                opacity: 1;
+            }
+
+            .loader-btn[data-loader="vanilla"]::before {
+                content: '🟩';
+                font-size: 24px;
+            }
+
+            .loader-btn[data-loader="forge"]::before {
+                content: '🔨';
+                font-size: 24px;
+            }
+
+            .loader-btn[data-loader="fabric"]::before {
+                content: '🧵';
+                font-size: 24px;
+            }
+
+            .loader-btn[data-loader="quilt"]::before {
+                content: '🪡';
+                font-size: 24px;
+            }
+
+            .loader-btn[data-loader="neoforge"]::before {
+                content: '⚒️';
+                font-size: 24px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="editor-container">
+            <div class="editor-header">
+                <h1 class="editor-title" id="editorTitle">Nueva Instalación</h1>
+                <p class="editor-subtitle" id="editorSubtitle">Crea una instalación personalizada de Minecraft</p>
+            </div>
+
+            <div class="error-message" id="errorMessage"></div>
+
+            <form id="installationForm">
+                <!-- Nombre de la instalación -->
+                <div class="form-group">
+                    <label class="form-label" for="installationName" id="labelName">Nombre de la Instalación</label>
+                    <input 
+                        type="text" 
+                        id="installationName" 
+                        class="form-input" 
+                        placeholder="Ej: Mi Servidor de Mods" 
+                        required
+                        maxlength="50"
+                    >
+                    <p class="helper-text" id="helperName">Elige un nombre descriptivo para identificar tu instalación</p>
+                </div>
+
+                <!-- Selector de Mod Loader -->
+                <div class="form-group">
+                    <label class="form-label" id="labelLoader">Tipo de Mod Loader</label>
+                    <div class="loader-selector">
+                        <button type="button" class="loader-btn active" data-loader="vanilla">Vanilla</button>
+                        <button type="button" class="loader-btn" data-loader="forge">Forge</button>
+                        <button type="button" class="loader-btn" data-loader="fabric">Fabric</button>
+                        <button type="button" class="loader-btn" data-loader="quilt">Quilt</button>
+                        <button type="button" class="loader-btn" data-loader="neoforge">NeoForge</button>
+                    </div>
+                </div>
+
+                <!-- Versión de Minecraft -->
+                <div class="form-group">
+                    <label class="form-label" for="minecraftVersion" id="labelMcVersion">Versión de Minecraft</label>
+                    <select id="minecraftVersion" class="form-select" required disabled>
+                        <option value="">Cargando versiones...</option>
+                    </select>
+                </div>
+
+                <!-- Versión del Loader (solo visible si no es Vanilla) -->
+                <div class="form-group" id="loaderVersionGroup" style="display: none;">
+                    <label class="form-label" for="loaderVersion" id="labelLoaderVersion">Versión del Loader</label>
+                    <select id="loaderVersion" class="form-select" disabled>
+                        <option value="">Selecciona primero la versión de Minecraft</option>
+                    </select>
+                </div>
+
+                <!-- Botones de acción -->
+                <div class="button-group">
+                    <button type="button" class="btn btn-secondary" id="cancelBtn">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="createBtn" disabled>
+                        Crear Instalación
+                    </button>
+                </div>
+            </form>
+        </div>
+    </body>
+</html>
