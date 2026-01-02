@@ -7,6 +7,7 @@ const ConfigManager  = require('./configmanager')
 const { DistroAPI }  = require('./distromanager')
 const LangLoader     = require('./langloader')
 const { LoggerUtil } = require('helios-core')
+const { ensureLauncherProfiles } = require('./launcherprofiles')
 // eslint-disable-next-line no-unused-vars
 const { HeliosDistribution } = require('helios-core/common')
 
@@ -21,6 +22,10 @@ ConfigManager.load()
 // TODO Fix this
 DistroAPI['commonDir'] = ConfigManager.getCommonDirectory()
 DistroAPI['instanceDir'] = ConfigManager.getInstanceDirectory()
+
+// Ensure launcher_profiles.json exists in commonDir for external installers compatibility.
+ensureLauncherProfiles(DistroAPI['commonDir'])
+    .catch(err => logger.warn('Failed to ensure launcher_profiles.json in commonDir:', err.message))
 
 // Load Strings
 LangLoader.setupLanguage()

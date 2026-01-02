@@ -28,6 +28,7 @@
     const common = require('helios-core/common')
     const dl = require('helios-core/dl')
     const java = require('helios-core/java')
+    const SkinManager = require('./assets/js/skinmanager')
     const { LoggerUtil } = require('helios-core')
     
     const MojangRestAPI = mojang.MojangRestAPI
@@ -67,6 +68,9 @@
     
     const loggerLanding = LoggerUtil.getLogger('Landing')
 
+    // OptiFine auto-profiles
+    const OptiFineVersions = require('./assets/js/optifineversions')
+
 /**
  * Crear un mock de objeto Server compatible con DistroAPI
  * para instalaciones personalizadas
@@ -97,6 +101,73 @@ function createServerMock(virtualServer) {
             suggestedMajor: 8,
             distribution: 'ADOPTIUM'
         }
+    }
+}
+
+async function resolveSelectedLaunchTarget(distro, logger, opts) {
+    const selectedInstallId = ConfigManager.getSelectedInstallation()
+
+    // Auto-profile (OptiFine detectado automáticamente)
+    if (selectedInstallId && OptiFineVersions.isAutoProfileId(selectedInstallId)) {
+        logger.info(`Auto-profile detectado: ${selectedInstallId}`)
+
+        const autoProfile = await OptiFineVersions.getAutoProfileById(selectedInstallId)
+        if (!autoProfile) {
+            logger.error(`Auto-profile no encontrado: ${selectedInstallId}`)
+            showLaunchFailure(opts.failureTitle, opts.autoProfileMissingText)
+            return null
+        }
+
+        const virtualServer = InstallationManager.autoProfileToServer(autoProfile)
+        return {
+            kind: 'optifine-auto',
+            server: createServerMock(virtualServer),
+            serverId: autoProfile.id,
+            autoProfile,
+            virtualServer
+        }
+    }
+
+    // Instalación personalizada
+    if (selectedInstallId) {
+        const installation = ConfigManager.getInstallation(selectedInstallId)
+        if (!installation) {
+            logger.error(`Instalación seleccionada no encontrada: ${selectedInstallId}`)
+            showLaunchFailure(opts.failureTitle, opts.installationMissingText)
+            return null
+        }
+
+        const validation = InstallationManager.validateInstallation(installation)
+        if (!validation.valid) {
+            logger.error('Instalación inválida:', validation.errors)
+            showLaunchFailure(opts.failureTitle, `Instalación inválida: ${validation.errors.join(', ')}${opts.installationInvalidSuffix || ''}`)
+            return null
+        }
+
+        const virtualServer = InstallationManager.installationToServer(installation)
+        return {
+            kind: 'custom',
+            server: createServerMock(virtualServer),
+            serverId: installation.id,
+            installation,
+            virtualServer
+        }
+    }
+
+    // Servidor TECNILAND (distribución)
+    const serverId = ConfigManager.getSelectedServer()
+    const distroResolved = distro || (await DistroAPI.getDistribution())
+    const server = distroResolved.getServerById(serverId)
+    if (!server) {
+        logger.error('No hay servidor o instalación seleccionada')
+        showLaunchFailure(opts.failureTitle, opts.noSelectionText)
+        return null
+    }
+
+    return {
+        kind: 'distro',
+        server,
+        serverId
     }
 }
 
@@ -160,64 +231,120 @@ function setLaunchEnabled(val){
 document.getElementById('launch_button').addEventListener('click', async e => {
     loggerLanding.info('Launching game..')
     try {
-        const selectedInstallId = ConfigManager.getSelectedInstallation()
-        let server
-        let serverId
-        
-        // Verificar si hay una instalación personalizada seleccionada
-        if(selectedInstallId) {
-            const installation = ConfigManager.getInstallation(selectedInstallId)
-            
-            if(!installation) {
-                loggerLanding.error(`Instalación seleccionada no encontrada: ${selectedInstallId}`)
-                showLaunchFailure(
-                    Lang.queryJS('landing.launch.failureTitle'),
-                    'La instalación seleccionada no existe. Por favor, selecciona otra instalación.'
-                )
-                return
-            }
-            
-            // Validar instalación
-            const validation = InstallationManager.validateInstallation(installation)
-            if(!validation.valid) {
-                loggerLanding.error('Instalación inválida:', validation.errors)
-                showLaunchFailure(
-                    Lang.queryJS('landing.launch.failureTitle'),
-                    `Instalación inválida: ${validation.errors.join(', ')}`
-                )
-                return
-            }
-            
-            // Convertir instalación a servidor virtual
-            const virtualServer = InstallationManager.installationToServer(installation)
-            server = { rawServer: virtualServer, effectiveJavaOptions: virtualServer.javaOptions || {} }
-            serverId = installation.id
-            
-            loggerLanding.info(`Lanzando instalación personalizada: ${installation.name}`)
-        } else {
-            // Usar servidor TECNILAND tradicional
-            serverId = ConfigManager.getSelectedServer()
-            server = (await DistroAPI.getDistribution()).getServerById(serverId)
-            
-            if(!server) {
-                loggerLanding.error('No hay servidor o instalación seleccionada')
-                showLaunchFailure(
-                    Lang.queryJS('landing.launch.failureTitle'),
-                    'No has seleccionado ninguna instalación o servidor.'
-                )
-                return
-            }
+        const target = await resolveSelectedLaunchTarget(null, loggerLanding, {
+            failureTitle: Lang.queryJS('landing.launch.failureTitle'),
+            autoProfileMissingText: 'La versión de OptiFine seleccionada ya no existe.',
+            installationMissingText: 'La instalación seleccionada no existe. Por favor, selecciona otra instalación.',
+            installationInvalidSuffix: '',
+            noSelectionText: 'No has seleccionado ninguna instalación o servidor.'
+        })
+
+        if (!target) {
+            return
         }
+
+        const server = target.server
+        const serverId = target.serverId
         
         // Obtener versión de Minecraft para JavaManager
         const minecraftVersion = server.rawServer.minecraftVersion
         loggerLanding.info(`Minecraft version: ${minecraftVersion}`)
+        
+        // Detectar si es NeoForge
+        const isNeoForge = server.modules && server.modules.length > 0 
+            && server.modules.some(mdl => {
+                const moduleType = mdl.rawModule ? mdl.rawModule.type : mdl.type
+                const moduleId = mdl.id || ''
+                return moduleType === 'NeoForgeMod' || moduleId.startsWith('net.neoforged:neoforge:')
+            })
+        
+        if (isNeoForge) {
+            loggerLanding.info('=== DETECTED NEOFORGE ===')
+            loggerLanding.info('  🚧 NeoForge MAINTENANCE MODE: Gate check required')
+            loggerLanding.info('=========================')
+            
+            // 🚧 MAINTENANCE GATE: NeoForge requires ephemeral confirmation every launch
+            loggerLanding.warn('🚧 NeoForge Maintenance Gate: Showing warning modal...')
+            
+            setLaunchDetails(Lang.queryJS('landing.dlAsync.loadingServerInfo'))
+            setLaunchPercentage(0, 100)
+            
+            const maintenanceTitle = Lang.queryJS('settings.neoforgeMaintenanceTitle')
+            const maintenanceMessage = Lang.queryJS('settings.neoforgeMaintenanceMessage')
+            const cancelText = Lang.queryJS('settings.neoforgeMaintenanceCancel')
+            const tryAnywayText = Lang.queryJS('settings.neoforgeMaintenanceTryAnyway')
+            
+            setOverlayContent(
+                maintenanceTitle,
+                maintenanceMessage,
+                tryAnywayText,
+                cancelText
+            )
+            
+            setOverlayHandler(() => {
+                // User clicked "Try Anyway" - continue with NeoForge launch (ephemeral, no persistence)
+                loggerLanding.warn('⚠️ User bypassed NeoForge maintenance gate (ephemeral)')
+                toggleOverlay(false)
+                // Continue execution by re-triggering dlAsync
+                dlAsync(login)
+            })
+            
+            setDismissHandler(() => {
+                // User clicked "Cancel" - abort launch
+                loggerLanding.info('✅ User cancelled NeoForge launch at maintenance gate')
+                toggleOverlay(false)
+                toggleLaunchArea(false)
+                setLaunchDetails(Lang.queryJS('landing.dlAsync.loginCancelled'))
+                setLaunchPercentage(0, 100)
+            })
+            
+            toggleOverlay(true, true)
+            return // Exit early, wait for user decision
+        }
+        
+        if (isNeoForge) {
+            loggerLanding.info('  NeoForge STRICT MODE: Java 17 ONLY')
+            loggerLanding.info('  Java 21/22 will be REJECTED')
+            loggerLanding.info('=========================')
+            
+            // STRICT MODE: Check if Java 17 is installed BEFORE continuing
+            const allJavaInstalls = await JavaManager.detectJavaInstallations()
+            const java17 = allJavaInstalls.find(j => j.majorVersion === 17)
+            
+            if (!java17) {
+                loggerLanding.warn('❌ Java 17 NOT FOUND in system')
+                loggerLanding.info('🔽 FORCING Java 17 download from Adoptium...')
+                
+                const neoForgeJavaOptions = {
+                    supported: '17.x',
+                    suggestedMajor: 17,
+                    distribution: 'ADOPTIUM'
+                }
+                
+                await asyncSystemScanWithJavaManager(neoForgeJavaOptions, true, serverId, minecraftVersion)
+                return // Will re-launch after download
+            }
+            
+            // Java 17 found, force use it
+            const java17Executable = java17.executableW || java17.executable
+            loggerLanding.info(`✅ NEOFORGE: Forcing Java 17 executable: ${java17Executable}`)
+            ConfigManager.setJavaExecutable(serverId, java17Executable)
+            ConfigManager.save()
+        }
         
         // Usar JavaManager para resolver el Java correcto
         const configuredJava = ConfigManager.getJavaExecutable(serverId)
         const javaResult = await JavaManager.resolveJavaForMinecraft(minecraftVersion, configuredJava)
         
         loggerLanding.info('Java resolution result:', javaResult)
+        
+        // ✅ NEOFORGE STRICT: Abort if not Java 17
+        if (isNeoForge && javaResult.success && javaResult.majorVersion !== 17) {
+            loggerLanding.error('❌ NEOFORGE CRITICAL ERROR ❌')
+            loggerLanding.error(`   Java ${javaResult.majorVersion} detected after forcing Java 17`)
+            loggerLanding.error('   This should never happen. Aborting launch.')
+            throw new Error(`NeoForge requires Java 17, but Java ${javaResult.majorVersion} was selected. Launch aborted.`)
+        }
         
         if (!javaResult.success) {
             // No hay Java compatible, necesitamos descargar
@@ -843,108 +970,70 @@ async function dlAsync(login = true) {
         return
     }
 
-    let serv
-    let serverId
-    const selectedInstallId = ConfigManager.getSelectedInstallation()
-    
-    // Verificar si hay una instalación personalizada seleccionada
-    if(selectedInstallId) {
-        const installation = ConfigManager.getInstallation(selectedInstallId)
-        
-        if(!installation) {
-            loggerLaunchSuite.error(`Instalación seleccionada no encontrada: ${selectedInstallId}`)
-            showLaunchFailure(
-                Lang.queryJS('landing.dlAsync.fatalError'),
-                'La instalación seleccionada no existe. Por favor, selecciona otra instalación.'
-            )
-            return
-        }
-        
-        // Validar instalación
-        const validation = InstallationManager.validateInstallation(installation)
-        if(!validation.valid) {
-            loggerLaunchSuite.error('Instalación inválida:', validation.errors)
-            showLaunchFailure(
-                Lang.queryJS('landing.dlAsync.fatalError'),
-                `Instalación inválida: ${validation.errors.join(', ')}. Por favor, crea una nueva instalación.`
-            )
-            return
-        }
-        
-        // Convertir instalación a servidor virtual
-        const virtualServer = InstallationManager.installationToServer(installation)
-        
-        // Crear un mock del objeto Server que simula la interfaz de DistroAPI
-        serv = createServerMock(virtualServer)
-        serverId = installation.id
-        
-        loggerLaunchSuite.info(`Lanzando instalación personalizada: ${installation.name}`)
-        loggerLaunchSuite.info(`  Loader: ${installation.loader.type} ${installation.loader.loaderVersion || ''}`)
-        loggerLaunchSuite.info(`  Minecraft: ${installation.loader.minecraftVersion}`)
-    } else {
-        // Usar servidor TECNILAND tradicional
-        serverId = ConfigManager.getSelectedServer()
-        serv = distro.getServerById(serverId)
-        
-        if(!serv) {
-            loggerLaunchSuite.error('No hay servidor o instalación seleccionada')
-            showLaunchFailure(
-                Lang.queryJS('landing.dlAsync.fatalError'),
-                'No has seleccionado ninguna instalación o servidor. Por favor, selecciona uno antes de lanzar.'
-            )
-            return
-        }
+    const target = await resolveSelectedLaunchTarget(distro, loggerLaunchSuite, {
+        failureTitle: Lang.queryJS('landing.dlAsync.fatalError'),
+        autoProfileMissingText: 'La versión de OptiFine seleccionada ya no existe. Puede que haya sido eliminada.',
+        installationMissingText: 'La instalación seleccionada no existe. Por favor, selecciona otra instalación.',
+        installationInvalidSuffix: '. Por favor, crea una nueva instalación.',
+        noSelectionText: Lang.queryJS('landing.noSelection')
+    })
+
+    if (!target) {
+        return
     }
 
-    if(login) {
-        if(ConfigManager.getSelectedAccount() == null){
-            loggerLanding.error('You must be logged into an account.')
-            return
-        }
-    }
-
-    setLaunchDetails(Lang.queryJS('landing.dlAsync.pleaseWait'))
-    toggleLaunchArea(true)
-    setLaunchPercentage(0, 100)
-
-    let fullRepairModule
+    const isDistroServer = target.kind === 'distro'
+    let serv = target.server
+    let serverId = target.serverId
     let mojangIndexProcessor = null
+    let fullRepairModule = null
 
-    // Para instalaciones personalizadas, descargar solo archivos de Minecraft vanilla
-    if(selectedInstallId) {
-        loggerLaunchSuite.info('Instalación personalizada - descargando archivos de Minecraft vanilla con MojangIndexProcessor')
-        
-        // Inicializar MojangIndexProcessor (NO usar const aquí, ya está declarado arriba)
+    if (target.kind === 'optifine-auto') {
+        loggerLaunchSuite.info(`Lanzando auto-profile OptiFine: ${target.autoProfile.name}`)
+        loggerLaunchSuite.info(`  versionId: ${target.autoProfile.versionId}`)
+        loggerLaunchSuite.info(`  minecraftVersion: ${target.autoProfile.minecraftVersion}`)
+    } else if (target.kind === 'custom') {
+        loggerLaunchSuite.info(`Lanzando instalación personalizada: ${target.installation.name}`)
+        loggerLaunchSuite.info(`  Loader: ${target.installation.loader.type} ${target.installation.loader.loaderVersion || ''}`)
+        loggerLaunchSuite.info(`  Minecraft: ${target.installation.loader.minecraftVersion}`)
+    }
+
+    // ============================================================
+    // DESCARGA/REPARACIÓN DE ARCHIVOS
+    // - Instalaciones personalizadas y auto-profiles: validar/descargar assets vanilla via MojangIndexProcessor
+    // - Servidores de distribución: FullRepair
+    // ============================================================
+    if (!isDistroServer) {
         mojangIndexProcessor = new MojangIndexProcessor(
             ConfigManager.getCommonDirectory(),
             serv.rawServer.minecraftVersion
         )
-        
+
         try {
             // Inicializar processor (carga manifests)
             setLaunchDetails('Cargando información de la versión...')
             await mojangIndexProcessor.init()
-            
+
             // Validar archivos
             loggerLaunchSuite.info('Validando archivos de Minecraft.')
             setLaunchDetails('Validando archivos de Minecraft...')
             setLaunchPercentage(0, 100)
-            
+
             let totalAssets = 0
             const assetCategories = await mojangIndexProcessor.validate(async () => {
                 // Callback por cada stage completado
                 setLaunchPercentage(Math.min(100, (totalAssets / 4) * 100))
             })
-            
+
             // Contar total de assets faltantes
             const allAssets = Object.values(assetCategories).flat()
             totalAssets = allAssets.length
-            
-            if(totalAssets > 0) {
+
+            if (totalAssets > 0) {
                 loggerLaunchSuite.info(`Descargando ${totalAssets} archivos de Minecraft.`)
                 setLaunchDetails(`Descargando archivos de Minecraft (${totalAssets} archivos)...`)
                 setLaunchPercentage(0, 100)
-                
+
                 let received = {}
                 await downloadQueue(allAssets, ({ id, transferred }) => {
                     received[id] = transferred
@@ -956,14 +1045,14 @@ async function dlAsync(login = true) {
             } else {
                 loggerLaunchSuite.info('Todos los archivos de Minecraft están actualizados.')
             }
-            
+
             setLaunchPercentage(100, 100)
-        } catch(err) {
+        } catch (err) {
             loggerLaunchSuite.error('Error durante la descarga de archivos de Minecraft para instalación personalizada.')
             showLaunchFailure('Error al descargar Minecraft', err.message || 'Ver consola para detalles')
             return
         }
-        
+
         // Remove download bar
         remote.getCurrentWindow().setProgressBar(-1)
     } else {
@@ -983,7 +1072,7 @@ async function dlAsync(login = true) {
             showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringLaunchTitle'), err.message || Lang.queryJS('landing.dlAsync.errorDuringLaunchText'))
         })
         fullRepairModule.childProcess.on('close', (code, _signal) => {
-            if(code !== 0){
+            if (code !== 0) {
                 loggerLaunchSuite.error(`Full Repair Module exited with code ${code}, assuming error.`)
                 showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringLaunchTitle'), Lang.queryJS('landing.dlAsync.seeConsoleForDetails'))
             }
@@ -1002,9 +1091,8 @@ async function dlAsync(login = true) {
             showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileVerificationTitle'), err.displayable || Lang.queryJS('landing.dlAsync.seeConsoleForDetails'))
             return
         }
-        
 
-        if(invalidFileCount > 0) {
+        if (invalidFileCount > 0) {
             loggerLaunchSuite.info('Downloading files.')
             setLaunchDetails(Lang.queryJS('landing.dlAsync.downloadingFiles'))
             setLaunchPercentage(0)
@@ -1013,7 +1101,7 @@ async function dlAsync(login = true) {
                     setDownloadPercentage(percent)
                 })
                 setDownloadPercentage(100)
-            } catch(err) {
+            } catch (err) {
                 loggerLaunchSuite.error('Error during file download.')
                 showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'), err.displayable || Lang.queryJS('landing.dlAsync.seeConsoleForDetails'))
                 return
@@ -1027,7 +1115,6 @@ async function dlAsync(login = true) {
 
         fullRepairModule.destroyReceiver()
     }
-    // Cerrar el bloque else de FullRepair
 
     setLaunchDetails(Lang.queryJS('landing.dlAsync.preparingToLaunch'))
 
@@ -1046,9 +1133,28 @@ async function dlAsync(login = true) {
     
     let modLoaderData = null
     
-    // Para instalaciones personalizadas, NO usar DistributionIndexProcessor (no están en distribución)
-    if(!selectedInstallId) {
-        // Solo para servidores TECNILAND tradicionales
+    // ============================================================
+    // CARGAR modLoaderData según el tipo de lanzamiento
+    // ============================================================
+    
+    // CASO 1: Auto-profile (OptiFine detectado)
+    if (target.kind === 'optifine-auto') {
+        loggerLaunchSuite.info('Cargando modLoaderData para auto-profile OptiFine')
+
+        // Cargar el version.json de OptiFine TAL CUAL
+        modLoaderData = await OptiFineVersions.getOptiFineVersionJson(target.autoProfile.versionId)
+
+        if (!modLoaderData) {
+            loggerLaunchSuite.error(`Error leyendo version.json de OptiFine: ${target.autoProfile.versionId}`)
+            showLaunchFailure('Error con OptiFine', `No se pudo leer el version.json de "${target.autoProfile.versionId}"`)
+            return
+        }
+
+        loggerLaunchSuite.info(`[Auto-Profile] version.json de OptiFine cargado: ${modLoaderData.id}`)
+        loggerLaunchSuite.info(`[Auto-Profile] mainClass: ${modLoaderData.mainClass}`)
+    }
+    // CASO 2: Servidor TECNILAND tradicional
+    else if (isDistroServer) {
         loggerLaunchSuite.info('Cargando modLoaderData para servidor TECNILAND')
         const distributionIndexProcessor = new DistributionIndexProcessor(
             ConfigManager.getCommonDirectory(),
@@ -1056,11 +1162,12 @@ async function dlAsync(login = true) {
             serverId
         )
         modLoaderData = await distributionIndexProcessor.loadModLoaderVersionJson(serv)
-    } else {
-        // Para instalaciones personalizadas con loaders
-        const installation = ConfigManager.getInstallation(selectedInstallId)
-        
-        if(installation.loader && installation.loader.type !== 'vanilla') {
+    }
+    // CASO 3: Instalación personalizada tradicional
+    else {
+        const installation = target.installation
+
+        if (installation.loader && installation.loader.type !== 'vanilla') {
             loggerLaunchSuite.info(`Instalación personalizada con loader: ${installation.loader.type}`)
             
             // Importar LoaderInstaller (ruta desde app/)
@@ -1113,10 +1220,37 @@ async function dlAsync(login = true) {
                 return
             }
         } else {
-            // Para instalaciones personalizadas Vanilla, usar versionData directamente
-            loggerLaunchSuite.info('Instalación personalizada - usando Vanilla puro (versionData como modManifest)')
-            modLoaderData = versionData
-            loggerLaunchSuite.info(`modLoaderData = versionData (${modLoaderData.id})`)
+            // Para instalaciones personalizadas Vanilla
+            // Verificar si tiene OptiFine habilitado
+            if (installation.optifine && installation.optifine.enabled && installation.optifine.versionId) {
+                loggerLaunchSuite.info(`Instalación Vanilla con OptiFine: ${installation.optifine.versionId}`)
+                
+                // Verificar que la versión OptiFine existe
+                const optifineExists = await OptiFineVersions.optiFineVersionExists(installation.optifine.versionId)
+                if (!optifineExists) {
+                    loggerLaunchSuite.error(`OptiFine version.json no encontrado: ${installation.optifine.versionId}`)
+                    showLaunchFailure('OptiFine no encontrado', 
+                        `La versión de OptiFine "${installation.optifine.versionId}" no está instalada. ` +
+                        'Por favor, instálala usando el instalador oficial de OptiFine.')
+                    return
+                }
+                
+                // Cargar version.json de OptiFine como modLoaderData
+                modLoaderData = await OptiFineVersions.getOptiFineVersionJson(installation.optifine.versionId)
+                if (!modLoaderData) {
+                    loggerLaunchSuite.error(`Error leyendo version.json de OptiFine: ${installation.optifine.versionId}`)
+                    showLaunchFailure('Error con OptiFine', 'No se pudo leer el version.json de OptiFine')
+                    return
+                }
+                
+                loggerLaunchSuite.info(`OptiFine version.json cargado: ${modLoaderData.id}`)
+                
+            } else {
+                // Vanilla puro, sin OptiFine
+                loggerLaunchSuite.info('Instalación personalizada - usando Vanilla puro (versionData como modManifest)')
+                modLoaderData = versionData
+                loggerLaunchSuite.info(`modLoaderData = versionData (${modLoaderData.id})`)
+            }
         }
     }
 
@@ -1176,7 +1310,7 @@ async function dlAsync(login = true) {
         }
 
         try {
-            // Build Minecraft process.
+            // Build Minecraft process
             proc = pb.build()
 
             // Notificar al live log viewer que el juego inició
@@ -1231,7 +1365,7 @@ async function dlAsync(login = true) {
             })
 
             // Init Discord Hook (only for distribution servers with Discord config)
-            if(!selectedInstallId && distro.rawDistribution.discord != null && serv.rawServer.discord != null){
+            if(isDistroServer && distro.rawDistribution.discord != null && serv.rawServer.discord != null){
                 DiscordWrapper.initRPC(distro.rawDistribution.discord, serv.rawServer.discord)
                 hasRPC = true
             }

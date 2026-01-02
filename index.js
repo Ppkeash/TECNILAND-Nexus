@@ -13,12 +13,21 @@ const { pathToFileURL }                 = require('url')
 const { AZURE_CLIENT_ID, MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR, SHELL_OPCODE } = require('./app/assets/js/ipcconstants')
 const LangLoader                        = require('./app/assets/js/langloader')
 const VersionAPI                        = require('./app/assets/js/versionapi')
+const { getLogger }                     = require('./app/assets/js/loggerutil')
+
+// Initialize logger
+const logger = getLogger()
+logger.info('TECNILAND NEXUS launcher iniciado')
+logger.info(`Versión: ${app ? app.getVersion() : 'unknown'}`)
+logger.info(`Modo desarrollo: ${isDev}`)
 
 // Setup Lang for main process (without ConfigManager)
 LangLoader.setupLanguageMain()
+logger.info('Sistema de idiomas inicializado')
 
 // Initialize version cache in background
 VersionAPI.initializeCache().catch(err => {
+    logger.error('Error al inicializar caché de versiones', err)
     console.error('Error al inicializar caché de versiones:', err)
 })
 
@@ -60,13 +69,16 @@ function initAutoUpdater(event, data) {
 ipcMain.on('autoUpdateAction', (event, arg, data, data2) => {
     switch(arg){
         case 'initAutoUpdater':
+            logger.info('Inicializando sistema de actualizaciones')
             console.log('Initializing auto updater.')
             initAutoUpdater(event, data)
             event.sender.send('autoUpdateNotification', 'ready')
             break
         case 'checkForUpdate':
+            logger.info('Verificando actualizaciones disponibles')
             autoUpdater.checkForUpdates()
                 .catch(err => {
+                    logger.error('Error al verificar actualizaciones', err)
                     event.sender.send('autoUpdateNotification', 'realerror', err)
                 })
             break
@@ -83,6 +95,7 @@ ipcMain.on('autoUpdateAction', (event, arg, data, data2) => {
             }
             break
         case 'installUpdateNow':
+            logger.info('Instalando actualización y reiniciando launcher')
             autoUpdater.quitAndInstall()
             break
         case 'showRestartDialog':
@@ -94,6 +107,7 @@ ipcMain.on('autoUpdateAction', (event, arg, data, data2) => {
             })
             break
         default:
+            logger.warn(`Acción de auto-updater desconocida: ${arg}`)
             console.log('Unknown argument', arg)
             break
     }
@@ -106,16 +120,52 @@ ipcMain.on('distributionIndexDone', (event, res) => {
 // Handle trash item.
 ipcMain.handle(SHELL_OPCODE.TRASH_ITEM, async (event, ...args) => {
     try {
+        logger.info(`Moviendo a papelera: ${args[0]}`)
         await shell.trashItem(args[0])
         return {
             result: true
         }
     } catch(error) {
+        logger.error(`Error al mover a papelera: ${args[0]}`, error)
         return {
             result: false,
             error: error
         }
     }
+})
+
+// IPC handlers para el sistema de logging
+ipcMain.handle('logger-get-path', () => {
+    return logger.getCurrentLogPath()
+})
+
+ipcMain.handle('logger-get-directory', () => {
+    return logger.getLogDirectory()
+})
+
+ipcMain.handle('logger-read-current', () => {
+    try {
+        const logPath = logger.getCurrentLogPath()
+        if (fs.existsSync(logPath)) {
+            return fs.readFileSync(logPath, 'utf8')
+        }
+        return ''
+    } catch(error) {
+        logger.error('Error al leer log actual', error)
+        return ''
+    }
+})
+
+ipcMain.handle('logger-info', (event, message) => {
+    logger.info(message)
+})
+
+ipcMain.handle('logger-warn', (event, message, error) => {
+    logger.warn(message, error)
+})
+
+ipcMain.handle('logger-error', (event, message, error) => {
+    logger.error(message, error)
 })
 
 // Disable hardware acceleration.
@@ -355,21 +405,42 @@ function getPlatformIcon(filename){
     return path.join(__dirname, 'app', 'assets', 'images', 'icons', `${filename}.${ext}`)
 }
 
-app.on('ready', createWindow)
-app.on('ready', createMenu)
+// App ready event
+app.on('ready', () => {
+    logger.info('Aplicación Electron lista, creando ventana principal')
+    createWindow()
+    createMenu()
+})
 
+// All windows closed event
 app.on('window-all-closed', () => {
+    logger.info('Todas las ventanas cerradas')
     // On macOS it is common for applications and their menu bar
     // to stay active until the user quits explicitly with Cmd + Q
     if (process.platform !== 'darwin') {
+        logger.info('Cerrando aplicación')
+        logger.closeSession()
         app.quit()
     }
 })
 
+// App activate event (macOS)
 app.on('activate', () => {
+    logger.info('Reactivando aplicación en macOS')
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
     if (win === null) {
         createWindow()
     }
+})
+
+// Capturar errores no manejados
+process.on('uncaughtException', (error) => {
+    logger.error('Uncaught Exception', error)
+    console.error('Uncaught Exception:', error)
+})
+
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled Rejection', reason)
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason)
 })

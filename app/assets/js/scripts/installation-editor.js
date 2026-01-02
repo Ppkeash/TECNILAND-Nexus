@@ -83,6 +83,7 @@ function setupLoaderSelector() {
             btn.classList.add('active')
             
             // Actualizar loader actual
+            const previousLoader = currentLoader
             currentLoader = btn.dataset.loader
 
             // Mostrar/ocultar selector de versión del loader
@@ -90,6 +91,12 @@ function setupLoaderSelector() {
                 loaderVersionGroup.style.display = 'none'
             } else {
                 loaderVersionGroup.style.display = 'block'
+            }
+
+            // Si cambió el loader, recargar versiones de MC para aplicar filtros de compatibilidad
+            if (previousLoader !== currentLoader) {
+                logger.info(`Loader cambió de ${previousLoader} a ${currentLoader}, recargando versiones de MC...`)
+                await loadMinecraftVersions()
             }
 
             // Limpiar y recargar versiones del loader si hay una versión de MC seleccionada
@@ -141,13 +148,19 @@ function setupLoaderVersionSelector() {
 /**
  * Cargar versiones de Minecraft desde la API
  * Filtra versiones legacy (< 1.13) a menos que estén habilitadas en settings
+ * Filtra por compatibilidad con el loader seleccionado (Fabric, Quilt, etc.)
  */
 async function loadMinecraftVersions() {
     const mcVersionSelect = document.getElementById('minecraftVersion')
+    const mcVersionInfo = document.getElementById('mcVersionInfo')
     
     try {
         mcVersionSelect.innerHTML = '<option value="">Cargando versiones...</option>'
         mcVersionSelect.disabled = true
+        if (mcVersionInfo) {
+            mcVersionInfo.style.display = 'none'
+            mcVersionInfo.textContent = ''
+        }
 
         const versions = await VersionAPI.getMinecraftVersions()
         
@@ -169,6 +182,33 @@ async function loadMinecraftVersions() {
                 return false
             })
         }
+
+        const totalBeforeLoaderFilter = filteredReleases.length
+        
+        // Filtrar por compatibilidad de loader
+        if (currentLoader === 'fabric') {
+            logger.info('Filtrando versiones de MC para compatibilidad con Fabric...')
+            const fabricGameVersions = await VersionAPI.getFabricGameVersions()
+            const compatibleIds = fabricGameVersions.map(v => v.version)
+            filteredReleases = filteredReleases.filter(v => compatibleIds.includes(v.id))
+            const hiddenCount = totalBeforeLoaderFilter - filteredReleases.length
+            logger.info(`Fabric filter: ${filteredReleases.length} compatibles, ${hiddenCount} ocultas`)
+            
+            // Mostrar mensaje en UI
+            if (hiddenCount > 0 && mcVersionInfo) {
+                mcVersionInfo.textContent = `Mostrando ${filteredReleases.length} versiones compatibles con Fabric (${hiddenCount} ocultas)`
+                mcVersionInfo.style.display = 'block'
+            }
+        } else if (currentLoader === 'quilt') {
+            // TODO: Implementar filtrado de Quilt cuando esté disponible la API
+            logger.info('Quilt: usando todas las versiones (filtrado no implementado)')
+        } else if (currentLoader === 'neoforge') {
+            // TODO: Implementar filtrado de NeoForge cuando esté disponible la API
+            logger.info('NeoForge: usando todas las versiones (filtrado no implementado)')
+        } else {
+            // Vanilla y Forge: mostrar todas las versiones (1.13+)
+            logger.info(`${currentLoader}: mostrando todas las versiones disponibles`)
+        }
         
         minecraftVersions = filteredReleases
 
@@ -178,7 +218,21 @@ async function loadMinecraftVersions() {
         filteredReleases.forEach(version => {
             const option = document.createElement('option')
             option.value = version.id
-            option.textContent = version.id
+            
+            // Añadir badge "Experimental" para versiones <1.13 si showLegacy está activo
+            let displayText = version.id
+            if (showLegacy) {
+                const parts = version.id.split('.')
+                if (parts.length >= 2) {
+                    const major = parseInt(parts[0], 10)
+                    const minor = parseInt(parts[1], 10)
+                    if (major === 1 && minor < 13) {
+                        displayText += ' [Experimental]'
+                    }
+                }
+            }
+            
+            option.textContent = displayText
             mcVersionSelect.appendChild(option)
         })
 
@@ -189,6 +243,9 @@ async function loadMinecraftVersions() {
         logger.error('Error al cargar versiones de Minecraft:', err)
         showError('Error al cargar versiones de Minecraft. Verifica tu conexión a internet.')
         mcVersionSelect.innerHTML = '<option value="">Error al cargar versiones</option>'
+        if (mcVersionInfo) {
+            mcVersionInfo.style.display = 'none'
+        }
     }
 }
 

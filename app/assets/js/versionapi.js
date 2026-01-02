@@ -225,6 +225,115 @@ exports.getForgeVersions = async function(minecraftVersion, forceRefresh = false
 }
 
 /**
+ * Obtener versiones de Minecraft compatibles con Fabric
+ * @param {boolean} forceRefresh - Forzar actualización desde API
+ * @returns {Promise<Array<Object>>} Array de versiones de MC compatibles { version: "1.20.1", stable: true }
+ */
+exports.getFabricGameVersions = async function(forceRefresh = false) {
+    // Cargar caché si no está en memoria
+    if (!versionCache.lastUpdated) {
+        loadCache()
+    }
+
+    // Verificar si necesitamos refrescar
+    if (!forceRefresh && !isCacheExpired() && versionCache.fabric.game.length > 0) {
+        logger.info('Usando caché de versiones de MC compatibles con Fabric')
+        return versionCache.fabric.game
+    }
+
+    // Obtener desde API
+    logger.info('Obteniendo versiones de MC compatibles con Fabric desde Meta API...')
+    try {
+        const response = await axios.get(API_URLS.FABRIC_GAME, { timeout: 10000 })
+        const games = response.data
+
+        // Extraer versiones con flag stable
+        const gameVersions = games.map(item => ({
+            version: item.version,
+            stable: item.stable === true
+        }))
+
+        // Actualizar caché
+        versionCache.fabric.game = gameVersions
+        versionCache.lastUpdated = new Date().toISOString()
+        saveCache()
+
+        logger.info(`Obtenidas ${gameVersions.length} versiones de MC compatibles con Fabric`)
+        return gameVersions
+
+    } catch (err) {
+        logger.error('Error al obtener versiones de MC para Fabric:', err.message)
+        
+        // Intentar usar caché expirado
+        if (versionCache.fabric.game.length > 0) {
+            logger.warn('Usando caché expirado de versiones de MC para Fabric')
+            return versionCache.fabric.game
+        }
+
+        return []
+    }
+}
+
+/**
+ * Obtener versiones de Minecraft compatibles con Quilt
+ * @param {boolean} forceRefresh - Forzar actualización desde API
+ * @returns {Promise<Array<Object>>} Array de versiones de MC compatibles { version: "1.20.1", stable: true }
+ */
+exports.getQuiltGameVersions = async function(forceRefresh = false) {
+    // Cargar caché si no está en memoria
+    if (!versionCache.lastUpdated) {
+        loadCache()
+    }
+
+    // Verificar si necesitamos refrescar - validar que cache sea array
+    if (!forceRefresh && !isCacheExpired() && Array.isArray(versionCache.quilt.game) && versionCache.quilt.game.length > 0) {
+        logger.info('Usando caché de versiones de MC compatibles con Quilt')
+        return versionCache.quilt.game
+    }
+
+    // Obtener desde API
+    logger.info('Obteniendo versiones de MC compatibles con Quilt desde Meta API...')
+    try {
+        const response = await axios.get('https://meta.quiltmc.org/v3/versions/game', { timeout: 10000 })
+        const games = response.data
+
+        // ✅ VALIDAR: response.data debe ser un array
+        if (!Array.isArray(games)) {
+            logger.error('Quilt Meta: invalid response shape, expected array, got:', typeof games)
+            throw new Error('Quilt Meta API returned non-array response')
+        }
+
+        // Extraer versiones con flag stable
+        const gameVersions = games.map(item => ({
+            version: item.version,
+            stable: item.stable === true
+        }))
+
+        logger.info(`Quilt Meta: received ${gameVersions.length} versions`)
+
+        // Actualizar caché
+        versionCache.quilt.game = gameVersions
+        versionCache.lastUpdated = new Date().toISOString()
+        saveCache()
+
+        return gameVersions
+
+    } catch (err) {
+        logger.error('Quilt Meta: request failed -', err.message)
+        
+        // Intentar usar caché expirado - validar que sea array
+        if (Array.isArray(versionCache.quilt.game) && versionCache.quilt.game.length > 0) {
+            logger.warn('Usando caché expirado de versiones de MC para Quilt')
+            return versionCache.quilt.game
+        }
+
+        // ✅ SIEMPRE retornar array vacío, nunca undefined
+        logger.warn('Quilt Meta: returning empty list (no cache available)')
+        return []
+    }
+}
+
+/**
  * Obtener versiones de Fabric Loader
  * @param {string} minecraftVersion - Versión de Minecraft (ej: "1.20.1")
  * @param {boolean} forceRefresh - Forzar actualización desde API
@@ -443,4 +552,130 @@ exports.getCacheInfo = function() {
         quiltLoadersCount: versionCache.quilt.loaders.length,
         neoforgeVersionsCount: Object.keys(versionCache.neoforge).length
     }
+}
+
+// ===================================================================
+// NEOFORGE API
+// ===================================================================
+
+/**
+ * Obtener versiones de NeoForge para una versión específica de Minecraft
+ * @param {string} minecraftVersion - Versión de Minecraft (ej: "1.20.4", "1.21.1")
+ * @param {boolean} forceRefresh - Forzar actualización del caché
+ * @returns {Promise<Array<string>>} Array de versiones de NeoForge
+ */
+exports.getNeoForgeVersions = async function(minecraftVersion, forceRefresh = false) {
+    try {
+        // ✅ NeoForge solo para MC 1.20.2+
+        if (!isVersionAtLeast(minecraftVersion, '1.20.2')) {
+            logger.warn(`NeoForge no es compatible con MC ${minecraftVersion} (requiere 1.20.2+)`)
+            return []
+        }
+        
+        // Verificar caché primero (si no se fuerza refresh)
+        if (!forceRefresh && versionCache.neoforge[minecraftVersion]) {
+            logger.info(`✅ Devolviendo ${versionCache.neoforge[minecraftVersion].length} versiones de NeoForge desde caché para MC ${minecraftVersion}`)
+            return versionCache.neoforge[minecraftVersion]
+        }
+        
+        logger.info(`Obteniendo versiones de NeoForge para MC ${minecraftVersion}...`)
+        
+        // Fetch desde NeoForge Maven API
+        const response = await axios.get(API_URLS.NEOFORGE_MAVEN, { timeout: 10000 })
+        const allVersions = response.data
+        
+        if (!Array.isArray(allVersions)) {
+            throw new Error('NeoForge Maven API no devolvió un array de versiones')
+        }
+        
+        logger.info(`NeoForge Maven API devolvió ${allVersions.length} versiones totales`)
+        
+        // ✅ Filtrar por "train" prefix según MC version
+        // MC 1.20.2 → train "20.2"
+        // MC 1.20.4 → train "20.4"
+        // MC 1.20.5 → train "20.5"
+        // MC 1.21.1 → train "21.1"
+        // MC 1.21.3 → train "21.3"
+        const train = extractNeoForgeTrain(minecraftVersion)
+        if (!train) {
+            logger.warn(`No se pudo determinar train de NeoForge para MC ${minecraftVersion}`)
+            return []
+        }
+        
+        logger.info(`Train calculado para MC ${minecraftVersion}: ${train}`)
+        
+        // Filtrar versiones que coincidan con el train
+        const compatibleVersions = allVersions.filter(v => v.startsWith(train + '.'))
+        logger.info(`✅ Encontradas ${compatibleVersions.length} versiones de NeoForge para MC ${minecraftVersion} (train ${train})`)
+        
+        // Guardar en caché
+        versionCache.neoforge[minecraftVersion] = compatibleVersions
+        versionCache.lastUpdated = Date.now()
+        saveCache()
+        
+        return compatibleVersions
+        
+    } catch (err) {
+        logger.error(`Error al obtener versiones de NeoForge para MC ${minecraftVersion}:`, err.message)
+        
+        // Intentar devolver desde caché aunque esté expirado
+        if (versionCache.neoforge[minecraftVersion]) {
+            logger.warn('Devolviendo versiones desde caché expirado como fallback')
+            return versionCache.neoforge[minecraftVersion]
+        }
+        
+        return []
+    }
+}
+
+/**
+ * Extraer el "train" de NeoForge desde la versión de Minecraft
+ * @param {string} mcVersion - Versión de Minecraft (ej: "1.20.4")
+ * @returns {string|null} Train (ej: "20.4") o null si no es compatible
+ */
+function extractNeoForgeTrain(mcVersion) {
+    // MC 1.20.2 → 20.2
+    // MC 1.20.4 → 20.4
+    // MC 1.21.1 → 21.1
+    // MC 1.21.11 → 21.11
+    
+    const parts = mcVersion.split('.')
+    if (parts.length < 2) {
+        return null
+    }
+    
+    // Primera parte siempre es "1"
+    if (parts[0] !== '1') {
+        return null
+    }
+    
+    // Segunda parte es el major
+    const major = parts[1]
+    
+    // Tercera parte es el minor (puede no existir → 0)
+    const minor = parts[2] || '0'
+    
+    // NeoForge train = major.minor (sin el "1." inicial)
+    return `${major}.${minor}`
+}
+
+/**
+ * Comparar si una versión es mayor o igual a otra
+ * @param {string} version - Versión a comparar (ej: "1.20.4")
+ * @param {string} minimumVersion - Versión mínima (ej: "1.20.2")
+ * @returns {boolean} true si version >= minimumVersion
+ */
+function isVersionAtLeast(version, minimumVersion) {
+    const v1Parts = version.split('.').map(Number)
+    const v2Parts = minimumVersion.split('.').map(Number)
+    
+    for (let i = 0; i < Math.max(v1Parts.length, v2Parts.length); i++) {
+        const v1 = v1Parts[i] || 0
+        const v2 = v2Parts[i] || 0
+        
+        if (v1 > v2) return true
+        if (v1 < v2) return false
+    }
+    
+    return true // Son iguales
 }

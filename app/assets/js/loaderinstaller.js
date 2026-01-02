@@ -14,6 +14,11 @@ const AdmZip = require('adm-zip')
 const crypto = require('crypto')
 const { ForgeProcessorRunner } = require('./forgeprocessor')
 
+// Import modular loader installers
+const FabricLoaderInstaller = require('./launch/loader/FabricLoaderInstaller')
+const QuiltLoaderInstaller = require('./launch/loader/QuiltLoaderInstaller')
+const NeoForgeLoaderInstaller = require('./launch/loader/NeoForgeLoaderInstaller')
+
 // Tipos de loaders
 const LoaderType = Object.freeze({
     VANILLA: 'vanilla',
@@ -1057,54 +1062,144 @@ class LoaderInstaller {
     }
 
     // =====================================================
-    // FABRIC (Stub - Para implementar después)
+    // FABRIC (Implementado con módulo dedicado)
     // =====================================================
 
     async validateFabric() {
-        logger.warn('Fabric validation not implemented yet')
-        return false
+        try {
+            const fabricInstaller = new FabricLoaderInstaller({
+                commonDir: this.commonDir,
+                instanceDir: this.instanceDir,
+                minecraftVersion: this.minecraftVersion,
+                loaderVersion: this.loaderVersion,
+                progressCallback: this.progressCallback
+            })
+            
+            return await fabricInstaller.validateInstallation()
+        } catch (error) {
+            logger.error(`Error validating Fabric: ${error.message}`)
+            return false
+        }
     }
 
     async installFabric() {
-        throw new Error('Fabric installation not implemented yet')
+        const fabricInstaller = new FabricLoaderInstaller({
+            commonDir: this.commonDir,
+            instanceDir: this.instanceDir,
+            minecraftVersion: this.minecraftVersion,
+            loaderVersion: this.loaderVersion,
+            progressCallback: this.progressCallback
+        })
+        
+        return await fabricInstaller.install()
     }
 
     async getFabricVersionJson() {
-        return null
+        try {
+            const fabricInstaller = new FabricLoaderInstaller({
+                commonDir: this.commonDir,
+                instanceDir: this.instanceDir,
+                minecraftVersion: this.minecraftVersion,
+                loaderVersion: this.loaderVersion
+            })
+            
+            return await fabricInstaller.getVersionJson()
+        } catch (error) {
+            logger.error(`Error getting Fabric version.json: ${error.message}`)
+            return null
+        }
     }
 
     // =====================================================
-    // QUILT (Stub - Para implementar después)
+    // QUILT
     // =====================================================
 
     async validateQuilt() {
-        logger.warn('Quilt validation not implemented yet')
-        return false
+        const quiltInstaller = new QuiltLoaderInstaller({
+            commonDir: this.commonDir,
+            instanceDir: this.instanceDir,
+            minecraftVersion: this.minecraftVersion,
+            loaderVersion: this.loaderVersion
+        })
+        
+        return await quiltInstaller.validateInstallation()
     }
 
     async installQuilt() {
-        throw new Error('Quilt installation not implemented yet')
+        const quiltInstaller = new QuiltLoaderInstaller({
+            commonDir: this.commonDir,
+            instanceDir: this.instanceDir,
+            minecraftVersion: this.minecraftVersion,
+            loaderVersion: this.loaderVersion,
+            progressCallback: this.progressCallback
+        })
+        
+        return await quiltInstaller.install()
     }
 
     async getQuiltVersionJson() {
-        return null
+        try {
+            const quiltInstaller = new QuiltLoaderInstaller({
+                commonDir: this.commonDir,
+                instanceDir: this.instanceDir,
+                minecraftVersion: this.minecraftVersion,
+                loaderVersion: this.loaderVersion
+            })
+            
+            return await quiltInstaller.getVersionJson()
+        } catch (error) {
+            logger.error(`Error getting Quilt version.json: ${error.message}`)
+            return null
+        }
     }
 
     // =====================================================
-    // NEOFORGE (Stub - Para implementar después)
+    // NEOFORGE
     // =====================================================
 
     async validateNeoForge() {
-        logger.warn('NeoForge validation not implemented yet')
-        return false
+        try {
+            const neoforgeInstaller = new NeoForgeLoaderInstaller({
+                commonDir: this.commonDir,
+                instanceDir: this.instanceDir,
+                minecraftVersion: this.minecraftVersion,
+                loaderVersion: this.loaderVersion,
+                progressCallback: this.progressCallback
+            })
+            
+            return await neoforgeInstaller.validateInstallation()
+        } catch (error) {
+            logger.error(`Error validating NeoForge: ${error.message}`)
+            return false
+        }
     }
 
     async installNeoForge() {
-        throw new Error('NeoForge installation not implemented yet')
+        const neoforgeInstaller = new NeoForgeLoaderInstaller({
+            commonDir: this.commonDir,
+            instanceDir: this.instanceDir,
+            minecraftVersion: this.minecraftVersion,
+            loaderVersion: this.loaderVersion,
+            progressCallback: this.progressCallback
+        })
+        
+        return await neoforgeInstaller.install()
     }
 
     async getNeoForgeVersionJson() {
-        return null
+        try {
+            const neoforgeInstaller = new NeoForgeLoaderInstaller({
+                commonDir: this.commonDir,
+                instanceDir: this.instanceDir,
+                minecraftVersion: this.minecraftVersion,
+                loaderVersion: this.loaderVersion
+            })
+            
+            return await neoforgeInstaller.getVersionJson()
+        } catch (error) {
+            logger.error(`Error getting NeoForge version.json: ${error.message}`)
+            return null
+        }
     }
 }
 

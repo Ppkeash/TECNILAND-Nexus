@@ -59,6 +59,76 @@ function getCurrentView(){
     return currentView
 }
 
+/**
+ * Restaurar la selección de servidor/instalación/auto-profile al iniciar
+ * 
+ * @param {Object} data - Distribution index data
+ */
+async function restoreSelectedServerOrInstallation(data) {
+    const selectedInstallId = ConfigManager.getSelectedInstallation()
+    const selectedServerId = ConfigManager.getSelectedServer()
+    
+    // Importar OptiFineVersions para detectar auto-profiles
+    const OptiFineVersions = require('./assets/js/optifineversions')
+    
+    // Prioridad 1: Auto-profile seleccionado
+    if (selectedInstallId && OptiFineVersions.isAutoProfileId(selectedInstallId)) {
+        const autoProfile = await OptiFineVersions.getAutoProfileById(selectedInstallId)
+        
+        if (autoProfile) {
+            const virtualServer = InstallationManager.autoProfileToServer(autoProfile)
+            updateSelectedServer({ rawServer: virtualServer })
+            console.log(`[UIBinder] Restaurado auto-profile: ${autoProfile.name}`)
+            return
+        } else {
+            // Auto-profile ya no existe, limpiar selección
+            console.warn(`[UIBinder] Auto-profile no encontrado: ${selectedInstallId}, limpiando selección`)
+            ConfigManager.setSelectedInstallation(null)
+            ConfigManager.save()
+        }
+    }
+    
+    // Prioridad 2: Instalación personalizada seleccionada
+    if (selectedInstallId) {
+        const installation = ConfigManager.getInstallation(selectedInstallId)
+        
+        if (installation) {
+            const virtualServer = InstallationManager.installationToServer(installation)
+            updateSelectedServer({ rawServer: virtualServer })
+            console.log(`[UIBinder] Restaurada instalación personalizada: ${installation.name}`)
+            return
+        } else {
+            // Instalación ya no existe, limpiar selección
+            console.warn(`[UIBinder] Instalación no encontrada: ${selectedInstallId}, limpiando selección`)
+            ConfigManager.setSelectedInstallation(null)
+            ConfigManager.save()
+        }
+    }
+    
+    // Prioridad 3: Servidor TECNILAND tradicional
+    if (selectedServerId) {
+        const server = data.getServerById(selectedServerId)
+        if (server) {
+            updateSelectedServer(server)
+            console.log(`[UIBinder] Restaurado servidor TECNILAND: ${server.rawServer.name}`)
+            return
+        }
+    }
+    
+    // Fallback: Seleccionar primer servidor de la distribución
+    if (data.servers && data.servers.length > 0) {
+        const firstServer = data.servers[0]
+        ConfigManager.setSelectedServer(firstServer.rawServer.id)
+        ConfigManager.setSelectedInstallation(null)
+        ConfigManager.save()
+        updateSelectedServer(firstServer)
+        console.log(`[UIBinder] Seleccionado servidor por defecto: ${firstServer.rawServer.name}`)
+    } else {
+        console.warn('[UIBinder] No hay servidores disponibles en la distribución')
+        updateSelectedServer(null)
+    }
+}
+
 async function showMainUI(data){
 
     if(!isDev){
@@ -67,7 +137,10 @@ async function showMainUI(data){
     }
 
     await prepareSettings(true)
-    updateSelectedServer(data.getServerById(ConfigManager.getSelectedServer()))
+    
+    // Restaurar selección: puede ser auto-profile, instalación personalizada, o servidor TECNILAND
+    await restoreSelectedServerOrInstallation(data)
+    
     refreshServerStatus()
     setTimeout(() => {
         document.getElementById('frameBar').style.backgroundColor = 'rgba(0, 0, 0, 0.5)'
@@ -134,8 +207,8 @@ function showFatalStartupError(){
  * 
  * @param {Object} data The distro index object.
  */
-function onDistroRefresh(data){
-    updateSelectedServer(data.getServerById(ConfigManager.getSelectedServer()))
+async function onDistroRefresh(data){
+    await restoreSelectedServerOrInstallation(data)
     refreshServerStatus()
     initNews()
     syncModConfigurations(data)

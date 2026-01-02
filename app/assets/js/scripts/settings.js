@@ -9,8 +9,128 @@ const {
     ensureJavaDirIsRoot
 }                    = require('helios-core/java')
 
+// LoggerUtil ya está disponible globalmente desde uicore.js
+const logger = LoggerUtil.getLogger('Settings')
 const settingsState = {
     invalid: new Set()
+}
+
+/**
+ * Verifica si un error tiene la estructura displayable {title, desc}.
+ * @param {*} err El error a verificar
+ * @returns {boolean} true si el error es displayable
+ */
+function isDisplayableError(err) {
+    return err != null && typeof err === 'object' && 
+           typeof err.title === 'string' && typeof err.desc === 'string'
+}
+
+/**
+ * Parse JVM arguments string with basic quote support.
+ * Handles quoted arguments with spaces: -Dpath="C:\My Folder"
+ * 
+ * @param {string} input Raw JVM arguments string
+ * @returns {Array<string>} Array of parsed arguments
+ */
+function parseJvmArgs(input) {
+    const args = []
+    let current = ''
+    let inQuote = false
+    let quoteChar = null
+    
+    for (let i = 0; i < input.length; i++) {
+        const char = input[i]
+        
+        if ((char === '"' || char === '\'') && (i === 0 || input[i - 1] !== '\\')) {
+            if (!inQuote) {
+                // Start quote
+                inQuote = true
+                quoteChar = char
+            } else if (char === quoteChar) {
+                // End quote
+                inQuote = false
+                quoteChar = null
+            } else {
+                // Different quote inside quote
+                current += char
+            }
+        } else if (char === ' ' && !inQuote) {
+            // Space outside quotes: end of argument
+            if (current.trim()) {
+                args.push(current.trim())
+                current = ''
+            }
+        } else {
+            current += char
+        }
+    }
+    
+    // Add last argument
+    if (current.trim()) {
+        args.push(current.trim())
+    }
+    
+    return args
+}
+
+/**
+ * Populate the Java installation context information.
+ * Shows the currently selected installation/server as visual context.
+ * Note: JVM args are global and apply to all installations.
+ */
+async function populateJavaInstallationContext() {
+    const nameEl = document.getElementById('settingsJavaInstallName')
+    const loaderEl = document.getElementById('settingsJavaInstallLoader')
+    const versionEl = document.getElementById('settingsJavaInstallVersion')
+    
+    const installId = ConfigManager.getSelectedInstallation()
+    
+    if (!installId) {
+        // No custom installation selected - using default server
+        try {
+            const distro = await DistroAPI.getDistribution()
+            const server = distro.getServerById(ConfigManager.getSelectedServer())
+            
+            nameEl.textContent = server.rawServer.name || 'Servidor TECNILAND'
+            loaderEl.textContent = 'Servidor (Forge/Mods)'
+            versionEl.textContent = server.rawServer.minecraftVersion || '-'
+        } catch(err) {
+            nameEl.textContent = 'Servidor por defecto'
+            loaderEl.textContent = '-'
+            versionEl.textContent = '-'
+        }
+        return
+    }
+    
+    // Custom installation selected
+    const install = ConfigManager.getInstallation(installId)
+    
+    if (!install) {
+        nameEl.textContent = 'Sin instalación'
+        loaderEl.textContent = '-'
+        versionEl.textContent = '-'
+        return
+    }
+    
+    // Populate from installation data
+    nameEl.textContent = install.name || install.id || 'Sin nombre'
+    
+    // Determine loader type
+    let loaderType = 'Vanilla'
+    const loaderValue = install.loader || install.modLoader
+    if (loaderValue && typeof loaderValue === 'string') {
+        loaderType = loaderValue.charAt(0).toUpperCase() + loaderValue.slice(1).toLowerCase()
+    } else if (loaderValue && typeof loaderValue === 'object' && loaderValue.type) {
+        loaderType = loaderValue.type.charAt(0).toUpperCase() + loaderValue.type.slice(1).toLowerCase()
+    }
+    loaderEl.textContent = loaderType
+    
+    // Determine Minecraft version (múltiples fuentes posibles)
+    let mcVersion = install.minecraftVersion || install.version
+    if (!mcVersion && loaderValue && typeof loaderValue === 'object') {
+        mcVersion = loaderValue.minecraftVersion || loaderValue.gameVersion
+    }
+    versionEl.textContent = mcVersion || '-'
 }
 
 function bindSettingsSelect(){
@@ -221,6 +341,9 @@ function initSettingsValidators(){
         }
 
     })
+    
+    // Inicializar estado de tabs al cargar Settings por primera vez
+    resetSettingsTabsToDefault()
 }
 
 /**
@@ -244,11 +367,12 @@ async function initSettingsValues(){
                 if(v.type === 'number' || v.type === 'text'){
                     // Special Conditions
                     if(cVal === 'JavaExecutable'){
-                        v.value = gFn.apply(null, gFnOpts)
-                        await populateJavaExecDetails(v.value)
+                        const execPath = gFn.apply(null, gFnOpts)
+                        v.value = execPath || 'Se detectará automáticamente al iniciar'
+                        await populateJavaExecDetails(execPath)
                     } else if (cVal === 'DataDirectory'){
                         v.value = gFn.apply(null, gFnOpts)
-                    } else if(cVal === 'JVMOptions'){
+                    } else if (cVal === 'JVMOptions' || cVal === 'GlobalJVMOptions'){
                         v.value = gFn.apply(null, gFnOpts).join(' ')
                     } else {
                         v.value = gFn.apply(null, gFnOpts)
@@ -298,11 +422,49 @@ function saveSettingsValues(){
                 if(v.type === 'number' || v.type === 'text'){
                     // Special Conditions
                     if(cVal === 'JVMOptions'){
+                        // Legacy per-installation JVM options (deprecated but still supported)
                         if(!v.value.trim()) {
                             sFnOpts.push([])
                             sFn.apply(null, sFnOpts)
                         } else {
                             sFnOpts.push(v.value.trim().split(/\s+/))
+                            sFn.apply(null, sFnOpts)
+                        }
+                    } else if(cVal === 'GlobalJVMOptions'){
+                        // Global JVM options (new preferred method)
+                        if(!v.value.trim()) {
+                            sFnOpts.push([])
+                            sFn.apply(null, sFnOpts)
+                        } else {
+                            // Parse args with basic quote support
+                            const rawInput = v.value.trim()
+                            const parsedArgs = parseJvmArgs(rawInput)
+                            
+                            // Sanitize: remove -Xmx/-Xms flags
+                            const memoryFlagRegex = /^-(Xmx|Xms)/
+                            const sanitizedArgs = parsedArgs.filter(arg => !memoryFlagRegex.test(arg))
+                            const ignoredCount = parsedArgs.length - sanitizedArgs.length
+                            
+                            // Show warning if memory flags were removed
+                            if(ignoredCount > 0) {
+                                const { remote } = require('electron')
+                                const logger = require(remote.app.getAppPath() + '/app/assets/js/loggerutil.js')
+                                
+                                logger.info(`JVM args sanitization: input=${parsedArgs.length}, ignored=${ignoredCount} (memory flags), final=${sanitizedArgs.length}`)
+                                
+                                // Show overlay warning
+                                setOverlayContent(
+                                    'Argumentos de Memoria Ignorados',
+                                    `Se ignoraron ${ignoredCount} argumento${ignoredCount > 1 ? 's' : ''} de memoria (-Xmx/-Xms).<br>Por favor, usa los sliders de RAM para ajustar la memoria.`,
+                                    'Entendido'
+                                )
+                                setOverlayHandler(() => {
+                                    toggleOverlay(false)
+                                })
+                                toggleOverlay(true, true)
+                            }
+                            
+                            sFnOpts.push(sanitizedArgs)
                             sFn.apply(null, sFnOpts)
                         }
                     } else {
@@ -357,6 +519,51 @@ function settingsTabScrollListener(e){
 }
 
 /**
+ * Resetear tabs de settings a estado por defecto: "Cuenta" seleccionada, scroll en 0.
+ * Se llama al abrir Settings o al inicializar tabs.
+ */
+function resetSettingsTabsToDefault(){
+    // Remover 'selected' de todos los nav items
+    const navItems = document.getElementsByClassName('settingsNavItem')
+    for(let i=0; i<navItems.length; i++){
+        navItems[i].removeAttribute('selected')
+    }
+    
+    // Remover 'active' de todas las tabs
+    const allTabs = document.getElementsByClassName('settingsTab')
+    for(let i=0; i<allTabs.length; i++){
+        allTabs[i].removeAttribute('active')
+        allTabs[i].classList.remove('animating')
+    }
+    
+    // Forzar selección de "Cuenta" (settingsTabAccount)
+    selectedSettingsTab = 'settingsTabAccount'
+    const accountNavBtn = document.getElementById('settingsNavAccount')
+    const accountTab = document.getElementById('settingsTabAccount')
+    
+    if(accountNavBtn) accountNavBtn.setAttribute('selected', '')
+    if(accountTab) {
+        accountTab.setAttribute('active', '')
+        accountTab.classList.add('animating')
+        
+        // Forzar reflow
+        void accountTab.offsetHeight
+        
+        // Remover animating para iniciar transition
+        requestAnimationFrame(() => {
+            accountTab.classList.remove('animating')
+        })
+    }
+    
+    // Resetear scroll del contenedor principal
+    const containerRight = document.getElementById('settingsContainerRight')
+    if(containerRight) {
+        containerRight.scrollTop = 0
+        containerRight.onscroll = settingsTabScrollListener
+    }
+}
+
+/**
  * Bind functionality for the settings navigation items.
  */
 function setupSettingsTabs(){
@@ -367,6 +574,9 @@ function setupSettingsTabs(){
             }
         }
     })
+    
+    // Forzar tab inicial: SIEMPRE "Cuenta" (settingsTabAccount)
+    resetSettingsTabsToDefault()
 }
 
 /**
@@ -390,32 +600,41 @@ function settingsNavItemListener(ele, fade = true){
     let prevTab = selectedSettingsTab
     selectedSettingsTab = ele.getAttribute('rSc')
 
-    document.getElementById(prevTab).onscroll = null
-    document.getElementById(selectedSettingsTab).onscroll = settingsTabScrollListener
-
-    if(fade){
-        $(`#${prevTab}`).fadeOut(250, () => {
-            $(`#${selectedSettingsTab}`).fadeIn({
-                duration: 250,
-                start: () => {
-                    settingsTabScrollListener({
-                        target: document.getElementById(selectedSettingsTab)
-                    })
-                }
-            })
-        })
-    } else {
-        $(`#${prevTab}`).hide(0, () => {
-            $(`#${selectedSettingsTab}`).show({
-                duration: 0,
-                start: () => {
-                    settingsTabScrollListener({
-                        target: document.getElementById(selectedSettingsTab)
-                    })
-                }
-            })
-        })
+    // Remover atributo 'active' del tab anterior y agregarlo al nuevo
+    const prevTabEl = document.getElementById(prevTab)
+    const nextTabEl = document.getElementById(selectedSettingsTab)
+    
+    if(prevTabEl) {
+        prevTabEl.removeAttribute('active')
+        prevTabEl.classList.remove('animating')
     }
+    
+    if(nextTabEl) {
+        // Agregar animación de entrada si fade=true
+        if(fade) {
+            // Agregar active y animating juntos (estado inicial)
+            nextTabEl.setAttribute('active', '')
+            nextTabEl.classList.add('animating')
+            
+            // Forzar reflow
+            void nextTabEl.offsetHeight
+            
+            // En el siguiente frame, remover animating para iniciar transition
+            requestAnimationFrame(() => {
+                nextTabEl.classList.remove('animating')
+            })
+        } else {
+            // Sin animación: activar directamente
+            nextTabEl.setAttribute('active', '')
+        }
+    }
+    
+    // Resetear scroll del contenedor principal al cambiar tabs
+    const containerRight = document.getElementById('settingsContainerRight')
+    if(containerRight) containerRight.scrollTop = 0
+    
+    // Actualizar listener de scroll para el contenedor (no las tabs individuales)
+    containerRight.onscroll = settingsTabScrollListener
 }
 
 const settingsNavDone = document.getElementById('settingsNavDone')
@@ -760,6 +979,9 @@ function refreshAuthAccountSelected(uuid){
 const settingsCurrentMicrosoftAccounts = document.getElementById('settingsCurrentMicrosoftAccounts')
 const settingsCurrentMojangAccounts = document.getElementById('settingsCurrentMojangAccounts')
 
+// Importar SkinManager para gestión de skins offline
+const SkinManager = require('./assets/js/skinmanager')
+
 /**
  * Add auth account elements for each one stored in the authentication database.
  */
@@ -781,19 +1003,29 @@ function populateAuthAccounts(){
         // Determine account type badge and image source
         let accountTypeBadge = ''
         let accountImage = ''
+        let skinButton = ''
         
         if(acc.type === 'microsoft') {
             accountTypeBadge = '<span class="settingsAuthAccountBadge badgeMicrosoft">Microsoft</span>'
-            accountImage = `https://mc-heads.net/body/${acc.uuid}/60`
+            accountImage = `https://mc-heads.net/body/${acc.uuid}/115`
         } else if(acc.type === 'mojang') {
             accountTypeBadge = '<span class="settingsAuthAccountBadge badgeMojang">Mojang</span>'
-            accountImage = `https://mc-heads.net/body/${acc.uuid}/60`
+            accountImage = `https://mc-heads.net/body/${acc.uuid}/115`
         } else if(acc.type === 'offline') {
             accountTypeBadge = '<span class="settingsAuthAccountBadge badgeOffline">Offline</span>'
-            accountImage = `https://mc-heads.net/avatar/${acc.uuid}/60`
+            // Usar skin local si existe, sino fallback a mc-heads
+            accountImage = SkinManager.getSkinDisplayUrl(acc.uuid, 'offline')
+            // Añadir botón de editar skin para cuentas offline
+            skinButton = `<button class="settingsAuthAccountSkin" data-uuid="${acc.uuid}" title="${Lang.queryJS('settings.skinEditor.editSkinTooltip')}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <span>${Lang.queryJS('settings.skinEditor.skinButton')}</span>
+            </button>`
         }
 
-        const accHtml = `<div class="settingsAuthAccount" uuid="${acc.uuid}">
+        const accHtml = `<div class="settingsAuthAccount" uuid="${acc.uuid}" data-type="${acc.type}">
             <div class="settingsAuthAccountLeft">
                 <img class="settingsAuthAccountImage" alt="${acc.displayName}" src="${accountImage}">
             </div>
@@ -809,6 +1041,7 @@ function populateAuthAccounts(){
                     </div>
                 </div>
                 <div class="settingsAuthAccountActions">
+                    ${skinButton}
                     <button class="settingsAuthAccountSelect" ${selectedUUID === acc.uuid ? 'selected>' + Lang.queryJS('settings.authAccountPopulate.selectedAccount') : '>' + Lang.queryJS('settings.authAccountPopulate.selectAccount')}</button>
                     <div class="settingsAuthAccountWrapper">
                         <button class="settingsAuthAccountLogOut">${Lang.queryJS('settings.authAccountPopulate.logout')}</button>
@@ -846,7 +1079,429 @@ function prepareAccountsTab() {
     populateAuthAccounts()
     bindAuthAccountSelect()
     bindAuthAccountLogOut()
+    bindAuthAccountSkinButtons()
 }
+
+// ==================== SKIN EDITOR ====================
+
+// Estado del editor de skins
+let skinEditorState = {
+    uuid: null,
+    username: null,
+    originalSkinPath: null,
+    pendingSkinPath: null,
+    pendingModel: 'classic',
+    hasChanges: false
+}
+
+/**
+ * Bind click handlers for skin edit buttons on offline accounts.
+ */
+function bindAuthAccountSkinButtons() {
+    const skinButtons = document.querySelectorAll('.settingsAuthAccountSkin')
+    skinButtons.forEach(btn => {
+        btn.onclick = () => {
+            const uuid = btn.getAttribute('data-uuid')
+            openSkinEditor(uuid)
+        }
+    })
+}
+
+/**
+ * Open the skin editor overlay for a specific account.
+ * @param {string} uuid - UUID of the offline account
+ */
+async function openSkinEditor(uuid) {
+    const account = ConfigManager.getAuthAccount(uuid)
+    if (!account || account.type !== 'offline') {
+        return
+    }
+
+    // Inicializar estado
+    const skinInfo = SkinManager.getSkinForUUID(uuid)
+    skinEditorState = {
+        uuid: uuid,
+        username: account.displayName,
+        originalSkinPath: skinInfo.path,
+        pendingSkinPath: null,
+        pendingModel: skinInfo.model || 'classic',
+        hasChanges: false
+    }
+
+    // Mostrar overlay primero para que el DOM exista
+    toggleOverlay(true, true, 'skinEditorContent')
+
+    // Pequeño delay para asegurar que el overlay está renderizado
+    await new Promise(resolve => setTimeout(resolve, 50))
+
+    // AHORA sí podemos acceder a los elementos del DOM y bindear handlers
+    bindSkinEditorHandlers()
+
+    // Actualizar UI del editor
+    const usernameEl = document.getElementById('skinEditorUsername')
+    if (usernameEl) usernameEl.textContent = account.displayName
+
+    // Cargar preview actual
+    await refreshSkinEditorPreview()
+
+    // Actualizar selector de modelo
+    updateModelSelector(skinEditorState.pendingModel)
+
+    // Mostrar/ocultar botón de eliminar según si hay skin
+    const removeBtn = document.getElementById('skinEditorRemoveSkin')
+    if (removeBtn) removeBtn.style.display = skinInfo.exists ? 'flex' : 'none'
+
+    // Ocultar botones de guardar/descartar (no hay cambios aún)
+    setSkinEditorPendingState(false)
+
+    // Cargar galería
+    await loadSkinGallery()
+}
+
+/**
+ * Refresh the skin preview canvas in the editor.
+ */
+async function refreshSkinEditorPreview() {
+    const canvas = document.getElementById('skinEditorCanvas')
+    const placeholder = document.getElementById('skinEditorNoSkin')
+    
+    // Determinar qué skin mostrar
+    const skinPath = skinEditorState.pendingSkinPath || skinEditorState.originalSkinPath
+    
+    if (skinPath) {
+        // Ocultar placeholder, mostrar canvas
+        placeholder.style.display = 'none'
+        canvas.style.display = 'block'
+        
+        // Renderizar preview
+        const model = skinEditorState.pendingModel
+        await SkinManager.renderSkinPreview(canvas, skinPath, model)
+    } else {
+        // Mostrar placeholder, ocultar canvas
+        canvas.style.display = 'none'
+        placeholder.style.display = 'flex'
+    }
+}
+
+/**
+ * Update the model selector buttons.
+ * @param {string} model - 'classic' or 'slim'
+ */
+function updateModelSelector(model) {
+    const buttons = document.querySelectorAll('.skinEditorModelBtn')
+    buttons.forEach(btn => {
+        if (btn.getAttribute('data-model') === model) {
+            btn.classList.add('active')
+        } else {
+            btn.classList.remove('active')
+        }
+    })
+}
+
+/**
+ * Set the pending changes state in the skin editor UI.
+ * @param {boolean} hasPending - Whether there are unsaved changes
+ */
+function setSkinEditorPendingState(hasPending) {
+    skinEditorState.hasChanges = hasPending
+    
+    document.getElementById('skinEditorPendingChanges').style.display = hasPending ? 'flex' : 'none'
+    document.getElementById('skinEditorSave').style.display = hasPending ? 'flex' : 'none'
+    document.getElementById('skinEditorDiscard').style.display = hasPending ? 'flex' : 'none'
+    document.getElementById('skinEditorClose').style.display = hasPending ? 'none' : 'flex'
+}
+
+/**
+ * Load and display the skin gallery.
+ */
+async function loadSkinGallery() {
+    const galleryGrid = document.getElementById('skinEditorGalleryGrid')
+    const skins = await SkinManager.listGallerySkins()
+    
+    if (skins.length === 0) {
+        galleryGrid.innerHTML = `<div class="skinEditorGalleryEmpty">
+            <span>${Lang.queryJS('settings.skinEditor.galleryEmpty')}</span>
+        </div>`
+        return
+    }
+    
+    let galleryHtml = ''
+    for (const skin of skins) {
+        galleryHtml += `<div class="skinEditorGalleryItem" data-path="${skin.path}" title="${skin.name}">
+            <canvas class="skinEditorGalleryCanvas" width="32" height="32"></canvas>
+            <span class="skinEditorGalleryName">${skin.name}</span>
+        </div>`
+    }
+    
+    galleryGrid.innerHTML = galleryHtml
+    
+    // Renderizar miniaturas
+    const items = galleryGrid.querySelectorAll('.skinEditorGalleryItem')
+    for (const item of items) {
+        const canvas = item.querySelector('.skinEditorGalleryCanvas')
+        const skinPath = item.getAttribute('data-path')
+        await SkinManager.renderSkinHead(canvas, skinPath)
+        
+        // Bind click handler
+        item.onclick = () => selectGallerySkin(skinPath)
+    }
+}
+
+/**
+ * Select a skin from the gallery.
+ * @param {string} skinPath - Path to the selected skin
+ */
+async function selectGallerySkin(skinPath) {
+    skinEditorState.pendingSkinPath = skinPath
+    setSkinEditorPendingState(true)
+    await refreshSkinEditorPreview()
+}
+
+/**
+ * Handle the "Change Skin" button click - open file dialog.
+ */
+async function handleSkinFileSelect() {
+    try {
+        const result = await remote.dialog.showOpenDialog(remote.getCurrentWindow(), {
+            title: Lang.queryJS('settings.skinEditor.dialogTitle'),
+            properties: ['openFile'],
+            filters: [
+                { name: Lang.queryJS('settings.skinEditor.pngFiles'), extensions: ['png'] }
+            ]
+        })
+        
+        if (result.canceled || result.filePaths.length === 0) {
+            return
+        }
+        
+        const filePath = result.filePaths[0]
+        
+        // Validar la imagen
+        const validation = await SkinManager.validateSkinImage(filePath)
+        if (!validation.valid) {
+            let errorMsg = Lang.queryJS('settings.skinEditor.invalidImage')
+            if (validation.error === 'INVALID_DIMENSIONS' && validation.dimensions) {
+                errorMsg = Lang.queryJS('settings.skinEditor.invalidDimensions')
+                    .replace('{width}', validation.dimensions.width)
+                    .replace('{height}', validation.dimensions.height)
+            }
+            
+            // Guardar UUID actual para reabrir después del error
+            const currentUuid = skinEditorState.uuid
+            
+            setOverlayContent(
+                Lang.queryJS('settings.skinEditor.errorTitle'),
+                errorMsg,
+                Lang.queryJS('settings.skinEditor.okButton')
+            )
+            setOverlayHandler(() => {
+                toggleOverlay(false)
+                // Reabrir el editor de skins después de cerrar el error
+                setTimeout(() => openSkinEditor(currentUuid), 300)
+            })
+            toggleOverlay(true, true)
+            return
+        }
+        
+        // Skin válida - actualizar estado y preview
+        skinEditorState.pendingSkinPath = filePath
+        setSkinEditorPendingState(true)
+        await refreshSkinEditorPreview()
+    } catch (error) {
+        console.error('Error al seleccionar archivo de skin:', error)
+    }
+}
+
+/**
+ * Save the pending skin changes.
+ */
+async function saveSkinChanges() {
+    if (!skinEditorState.hasChanges || !skinEditorState.pendingSkinPath) {
+        return
+    }
+    
+    try {
+        const result = await SkinManager.setSkinForUUID(
+            skinEditorState.uuid,
+            skinEditorState.pendingSkinPath,
+            skinEditorState.pendingModel
+        )
+        
+        if (result.success) {
+            // Actualizar estado
+            skinEditorState.originalSkinPath = result.path
+            skinEditorState.pendingSkinPath = null
+            skinEditorState.hasChanges = false
+            
+            // Refrescar UI
+            setSkinEditorPendingState(false)
+            const removeBtn = document.getElementById('skinEditorRemoveSkin')
+            if (removeBtn) removeBtn.style.display = 'flex'
+            
+            // Refrescar lista de cuentas para mostrar nueva skin
+            populateAuthAccounts()
+            bindAuthAccountSelect()
+            bindAuthAccountLogOut()
+            bindAuthAccountSkinButtons()
+            
+            // Cerrar editor con un pequeño delay para feedback visual
+            setTimeout(() => closeSkinEditor(), 200)
+        } else {
+            // Guardar UUID para reabrir después del error
+            const currentUuid = skinEditorState.uuid
+            
+            // Mostrar error
+            setOverlayContent(
+                Lang.queryJS('settings.skinEditor.errorTitle'),
+                Lang.queryJS('settings.skinEditor.saveError'),
+                Lang.queryJS('settings.skinEditor.okButton')
+            )
+            setOverlayHandler(() => {
+                toggleOverlay(false)
+                setTimeout(() => openSkinEditor(currentUuid), 300)
+            })
+            toggleOverlay(true, true)
+        }
+    } catch (error) {
+        console.error('Error al guardar skin:', error)
+    }
+}
+
+/**
+ * Discard pending skin changes.
+ */
+async function discardSkinChanges() {
+    skinEditorState.pendingSkinPath = null
+    skinEditorState.hasChanges = false
+    setSkinEditorPendingState(false)
+    await refreshSkinEditorPreview()
+}
+
+/**
+ * Remove the current skin from the account.
+ */
+async function removeSkin() {
+    try {
+        const result = await SkinManager.deleteSkinForUUID(skinEditorState.uuid)
+        
+        if (result.success) {
+            skinEditorState.originalSkinPath = null
+            skinEditorState.pendingSkinPath = null
+            skinEditorState.hasChanges = false
+            
+            setSkinEditorPendingState(false)
+            const removeBtn = document.getElementById('skinEditorRemoveSkin')
+            if (removeBtn) removeBtn.style.display = 'none'
+            await refreshSkinEditorPreview()
+            
+            // Refrescar lista de cuentas
+            populateAuthAccounts()
+            bindAuthAccountSelect()
+            bindAuthAccountLogOut()
+            bindAuthAccountSkinButtons()
+        }
+    } catch (error) {
+        console.error('Error al eliminar skin:', error)
+    }
+}
+
+/**
+ * Close the skin editor overlay.
+ */
+function closeSkinEditor() {
+    toggleOverlay(false)
+    skinEditorState = {
+        uuid: null,
+        username: null,
+        originalSkinPath: null,
+        pendingSkinPath: null,
+        pendingModel: 'classic',
+        hasChanges: false
+    }
+}
+
+/**
+ * Bind all skin editor event handlers.
+ * Se llama cada vez que se abre el editor para asegurar que los elementos existen.
+ */
+function bindSkinEditorHandlers() {
+    // Botón "Cambiar Skin"
+    const changeSkinBtn = document.getElementById('skinEditorChangeSkin')
+    if (changeSkinBtn) {
+        changeSkinBtn.onclick = handleSkinFileSelect
+    }
+
+    // Botón "Guardar"
+    const saveBtn = document.getElementById('skinEditorSave')
+    if (saveBtn) {
+        saveBtn.onclick = saveSkinChanges
+    }
+
+    // Botón "Descartar"
+    const discardBtn = document.getElementById('skinEditorDiscard')
+    if (discardBtn) {
+        discardBtn.onclick = discardSkinChanges
+    }
+
+    // Botón "Eliminar Skin"
+    const removeBtn = document.getElementById('skinEditorRemoveSkin')
+    if (removeBtn) {
+        removeBtn.onclick = removeSkin
+    }
+
+    // Botón "Cerrar"
+    const closeBtn = document.getElementById('skinEditorClose')
+    if (closeBtn) {
+        closeBtn.onclick = closeSkinEditor
+    }
+
+    // Botones de selector de modelo
+    const modelButtons = document.querySelectorAll('.skinEditorModelBtn')
+    modelButtons.forEach(btn => {
+        btn.onclick = async () => {
+            const model = btn.getAttribute('data-model')
+            skinEditorState.pendingModel = model
+            updateModelSelector(model)
+            
+            // Si hay una skin (pendiente o original), marcar como cambio y refrescar
+            if (skinEditorState.pendingSkinPath || skinEditorState.originalSkinPath) {
+                const originalModel = SkinManager.getSkinForUUID(skinEditorState.uuid)?.model || 'classic'
+                if (model !== originalModel || skinEditorState.pendingSkinPath) {
+                    setSkinEditorPendingState(true)
+                }
+                await refreshSkinEditorPreview()
+            }
+        }
+    })
+}
+
+// Escuchar evento de skin actualizada (este se registra una sola vez)
+if (typeof window !== 'undefined' && !window.__skinEditorEventListenerRegistered) {
+    window.addEventListener(SkinManager.SKIN_UPDATED_EVENT, (e) => {
+        const { uuid } = e.detail
+        
+        // Actualizar imagen en la lista de cuentas si está visible
+        const accountElements = document.querySelectorAll(`.settingsAuthAccount[uuid="${uuid}"]`)
+        accountElements.forEach(el => {
+            const img = el.querySelector('.settingsAuthAccountImage')
+            if (img) {
+                // Forzar recarga añadiendo timestamp
+                const newUrl = SkinManager.getSkinDisplayUrl(uuid, 'offline')
+                img.src = newUrl.includes('?') ? `${newUrl}&t=${Date.now()}` : `${newUrl}?t=${Date.now()}`
+            }
+        })
+        
+        // Actualizar avatar en landing si es la cuenta seleccionada
+        const selectedAccount = ConfigManager.getSelectedAccount()
+        if (selectedAccount && selectedAccount.uuid === uuid && authUser.type === 'offline') {
+            // Forzar recarga del avatar
+            updateSelectedAccount(selectedAccount)
+        }
+    })
+    window.__skinEditorEventListenerRegistered = true
+}
+
+// ==================== FIN SKIN EDITOR ====================
 
 /**
  * Minecraft Tab
@@ -1040,10 +1695,28 @@ async function resolveDropinModsForUI(){
     let instanceId, minecraftVersion
     
     if(selectedInstallId) {
-        // Instalación custom
-        const installation = ConfigManager.getInstallation(selectedInstallId)
-        instanceId = installation.id
-        minecraftVersion = installation.version
+        const OptiFineVersions = require('./assets/js/optifineversions')
+        
+        // Caso 1: Auto-profile (OptiFine)
+        if(OptiFineVersions.isAutoProfileId(selectedInstallId)) {
+            const autoProfile = await OptiFineVersions.getAutoProfileById(selectedInstallId)
+            if(!autoProfile) {
+                logger.error(`Auto-profile not found: ${selectedInstallId}`)
+                return
+            }
+            instanceId = autoProfile.id
+            minecraftVersion = autoProfile.minecraftVersion
+        }
+        // Caso 2: Instalación custom
+        else {
+            const installation = ConfigManager.getInstallation(selectedInstallId)
+            if(!installation) {
+                logger.error(`Installation not found: ${selectedInstallId}`)
+                return
+            }
+            instanceId = installation.id
+            minecraftVersion = installation.version
+        }
     } else {
         // Servidor de distribución
         const serv = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
@@ -1200,9 +1873,26 @@ async function resolveShaderpacksForUI(){
     let instanceId
     
     if(selectedInstallId) {
-        // Instalación custom
-        const installation = ConfigManager.getInstallation(selectedInstallId)
-        instanceId = installation.id
+        const OptiFineVersions = require('./assets/js/optifineversions')
+        
+        // Caso 1: Auto-profile (OptiFine)
+        if(OptiFineVersions.isAutoProfileId(selectedInstallId)) {
+            const autoProfile = await OptiFineVersions.getAutoProfileById(selectedInstallId)
+            if(!autoProfile) {
+                logger.error(`Auto-profile not found: ${selectedInstallId}`)
+                return
+            }
+            instanceId = autoProfile.id
+        }
+        // Caso 2: Instalación custom
+        else {
+            const installation = ConfigManager.getInstallation(selectedInstallId)
+            if(!installation) {
+                logger.error(`Installation not found: ${selectedInstallId}`)
+                return
+            }
+            instanceId = installation.id
+        }
     } else {
         // Servidor de distribución
         const serv = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
@@ -1293,22 +1983,83 @@ async function loadSelectedServerOnModsTab(){
     const selectedInstallId = ConfigManager.getSelectedInstallation()
     let displayData
     
-    if(selectedInstallId) {
+    // Importar OptiFineVersions para detectar auto-profiles
+    const OptiFineVersions = require('./assets/js/optifineversions')
+    
+    // Caso 1: Auto-profile (OptiFine detectado)
+    if(selectedInstallId && OptiFineVersions.isAutoProfileId(selectedInstallId)) {
+        const autoProfile = await OptiFineVersions.getAutoProfileById(selectedInstallId)
+        
+        if(autoProfile) {
+            displayData = {
+                icon: 'assets/images/icons/sevenstar_circle.svg',
+                name: autoProfile.name,
+                description: `OptiFine - MC ${autoProfile.minecraftVersion}`,
+                minecraftVersion: autoProfile.minecraftVersion,
+                version: 'OptiFine',
+                mainServer: false
+            }
+        } else {
+            // Auto-profile no encontrado, usar fallback
+            displayData = {
+                icon: 'assets/images/icons/sevenstar_circle.svg',
+                name: 'OptiFine',
+                description: 'Auto-profile no encontrado',
+                minecraftVersion: '?',
+                version: 'OptiFine',
+                mainServer: false
+            }
+        }
+    }
+    // Caso 2: Instalación personalizada
+    else if(selectedInstallId) {
         // Usar datos de la instalación custom
         const installation = ConfigManager.getInstallation(selectedInstallId)
-        const loaderText = installation.loader === 'vanilla' ? 'Vanilla' : 
-                          installation.loader === 'forge' ? `Forge ${installation.loaderVersion}` :
-                          installation.loader === 'fabric' ? `Fabric ${installation.loaderVersion}` :
-                          installation.loader === 'quilt' ? `Quilt ${installation.loaderVersion}` :
-                          installation.loader === 'neoforge' ? `NeoForge ${installation.loaderVersion}` : installation.loader
         
-        displayData = {
-            icon: 'assets/images/icons/sevenstar_circle.svg',
-            name: installation.name,
-            description: `${loaderText} - MC ${installation.version}`,
-            minecraftVersion: installation.version,
-            version: installation.loader,
-            mainServer: false
+        if(installation) {
+            const loaderType = installation.loader?.type || installation.loader || 'vanilla'
+            const loaderVersion = installation.loader?.loaderVersion || installation.loaderVersion || ''
+            const mcVersion = installation.loader?.minecraftVersion || installation.version || '?'
+            
+            const loaderText = loaderType === 'vanilla' ? 'Vanilla' : 
+                              loaderType === 'forge' ? `Forge ${loaderVersion}` :
+                              loaderType === 'fabric' ? `Fabric ${loaderVersion}` :
+                              loaderType === 'quilt' ? `Quilt ${loaderVersion}` :
+                              loaderType === 'neoforge' ? `NeoForge ${loaderVersion}` : loaderType
+            
+            displayData = {
+                icon: 'assets/images/icons/sevenstar_circle.svg',
+                name: installation.name,
+                description: `${loaderText} - MC ${mcVersion}`,
+                minecraftVersion: mcVersion,
+                version: loaderType,
+                mainServer: false
+            }
+        } else {
+            // Instalación no encontrada, limpiar selección
+            ConfigManager.setSelectedInstallation(null)
+            ConfigManager.save()
+            // Usar servidor por defecto
+            const serv = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
+            if(serv) {
+                displayData = {
+                    icon: serv.rawServer.icon,
+                    name: serv.rawServer.name,
+                    description: serv.rawServer.description,
+                    minecraftVersion: serv.rawServer.minecraftVersion,
+                    version: serv.rawServer.version,
+                    mainServer: serv.rawServer.mainServer
+                }
+            } else {
+                displayData = {
+                    icon: 'assets/images/icons/sevenstar_circle.svg',
+                    name: 'Sin selección',
+                    description: 'Selecciona un servidor o instalación',
+                    minecraftVersion: '?',
+                    version: '?',
+                    mainServer: false
+                }
+            }
         }
     } else {
         // Usar servidor de distribución
@@ -1377,23 +2128,286 @@ function animateSettingsTabRefresh(){
 }
 
 /**
+ * Get the mods directory for a custom installation.
+ * @param {string} installId Installation ID
+ * @returns {string} Full path to mods directory
+ */
+function getModsDirectory(installId) {
+    const instanceDir = ConfigManager.getInstanceDirectory()
+    return path.join(instanceDir, installId, 'mods')
+}
+
+/**
+ * Scan local mods directory for installed mods.
+ * @param {string} modsDir Path to mods directory
+ * @returns {Promise<Array>} Array of mod info objects
+ */
+async function scanLocalMods(modsDir) {
+    const fs = require('fs-extra')
+    const mods = []
+    
+    try {
+        await fs.ensureDir(modsDir)
+        const files = await fs.readdir(modsDir)
+        
+        for (const file of files) {
+            if (file.endsWith('.jar')) {
+                const filePath = path.join(modsDir, file)
+                const stats = await fs.stat(filePath)
+                
+                mods.push({
+                    fileName: file,
+                    name: file.replace('.jar', ''),
+                    size: (stats.size / 1024 / 1024).toFixed(2) + ' MB',
+                    enabled: true,
+                    path: filePath
+                })
+            } else if (file.endsWith('.jar.disabled')) {
+                const filePath = path.join(modsDir, file)
+                const stats = await fs.stat(filePath)
+                
+                mods.push({
+                    fileName: file,
+                    name: file.replace('.jar.disabled', ''),
+                    size: (stats.size / 1024 / 1024).toFixed(2) + ' MB',
+                    enabled: false,
+                    path: filePath
+                })
+            }
+        }
+    } catch (err) {
+        logger.error('Error scanning mods directory:', err)
+    }
+    
+    return mods
+}
+
+/**
+ * Toggle mod enabled/disabled state.
+ * @param {string} modPath Full path to mod file
+ * @param {boolean} currentState Current enabled state
+ */
+async function toggleLocalMod(modPath, currentState) {
+    const fs = require('fs-extra')
+    try {
+        if (currentState) {
+            // Disable: rename .jar to .jar.disabled
+            await fs.rename(modPath, modPath + '.disabled')
+        } else {
+            // Enable: rename .jar.disabled to .jar
+            await fs.rename(modPath, modPath.replace('.jar.disabled', '.jar'))
+        }
+        return true
+    } catch (err) {
+        logger.error('Error toggling mod:', err)
+        return false
+    }
+}
+
+/**
+ * Render local mods UI for custom installations.
+ * @param {Array} mods Array of mod objects
+ * @param {string} modsDir Path to mods directory
+ */
+function renderLocalModsUI(mods, modsDir, installName) {
+    const modsContainer = document.getElementById('settingsModsContainer')
+    
+    let modsHTML = `
+        <div style="padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <div>
+                    <h3 style="color: rgba(255,255,255,0.9); margin: 0 0 0.5rem 0; font-size: 1.1rem;">Gestión Local de Mods</h3>
+                    <p style="color: rgba(255,255,255,0.6); margin: 0; font-size: 0.9rem;">Instalación: <strong>${installName}</strong></p>
+                </div>
+                <button id="openModsFolderBtn" style="background: rgba(0, 122, 204, 0.8); color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 4px; cursor: pointer; font-size: 0.9rem;">
+                    📁 Abrir Carpeta Mods
+                </button>
+            </div>
+    `
+    
+    if (mods.length === 0) {
+        modsHTML += `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; text-align: center;">
+                <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" style="margin-bottom: 1rem;">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="12" y1="8" x2="12" y2="16"></line>
+                    <line x1="8" y1="12" x2="16" y2="12"></line>
+                </svg>
+                <h4 style="color: rgba(255,255,255,0.7); margin: 0 0 0.5rem 0;">No hay mods instalados</h4>
+                <p style="color: rgba(255,255,255,0.5); margin: 0;">Haz clic en "Abrir Carpeta Mods" para añadir archivos .jar</p>
+            </div>
+        `
+    } else {
+        modsHTML += `
+            <div style="color: rgba(255,255,255,0.6); margin-bottom: 1rem; font-size: 0.9rem;">
+                ${mods.length} mod${mods.length !== 1 ? 's' : ''} encontrado${mods.length !== 1 ? 's' : ''}
+            </div>
+            <div style="max-height: 400px; overflow-y: auto;" class="scrollbar-track">
+        `
+        
+        mods.forEach((mod, index) => {
+            const statusColor = mod.enabled ? 'rgba(76, 175, 80, 0.8)' : 'rgba(158, 158, 158, 0.6)'
+            const statusText = mod.enabled ? 'Habilitado' : 'Deshabilitado'
+            
+            modsHTML += `
+                <div style="background: rgba(255,255,255,0.05); border-radius: 4px; padding: 0.8rem 1rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="flex: 1;">
+                        <div style="color: rgba(255,255,255,0.9); font-weight: 500; margin-bottom: 0.3rem;">${mod.name}</div>
+                        <div style="color: rgba(255,255,255,0.5); font-size: 0.85rem;">${mod.size}</div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <span style="color: ${statusColor}; font-size: 0.85rem; font-weight: 500;">${statusText}</span>
+                        <label class="toggleSwitch" style="margin: 0;">
+                            <input type="checkbox" ${mod.enabled ? 'checked' : ''} data-mod-path="${mod.path}" data-mod-enabled="${mod.enabled}" class="localModToggle">
+                            <span class="toggleSwitchSlider"></span>
+                        </label>
+                    </div>
+                </div>
+            `
+        })
+        
+        modsHTML += '</div>'
+    }
+    
+    modsHTML += '</div>'
+    
+    modsContainer.innerHTML = modsHTML
+    
+    // Bind open folder button
+    const openBtn = document.getElementById('openModsFolderBtn')
+    if (openBtn) {
+        openBtn.onclick = () => {
+            const { shell } = require('electron')
+            shell.openPath(modsDir)
+        }
+    }
+    
+    // Bind toggle switches
+    const toggles = document.querySelectorAll('.localModToggle')
+    toggles.forEach(toggle => {
+        toggle.addEventListener('change', async (e) => {
+            const modPath = e.target.getAttribute('data-mod-path')
+            const currentState = e.target.getAttribute('data-mod-enabled') === 'true'
+            
+            const success = await toggleLocalMod(modPath, currentState)
+            
+            if (success) {
+                // Refresh the UI
+                const installId = ConfigManager.getSelectedInstallation()
+                const install = ConfigManager.getInstallation(installId)
+                const modsDir = getModsDirectory(installId)
+                const mods = await scanLocalMods(modsDir)
+                renderLocalModsUI(mods, modsDir, install.name || install.id)
+            } else {
+                // Revert toggle state on error
+                e.target.checked = currentState
+                setOverlayContent(
+                    'Error',
+                    'No se pudo cambiar el estado del mod. Verifica los permisos del archivo.',
+                    'Entendido'
+                )
+                setOverlayHandler(null)
+                toggleOverlay(true)
+            }
+        })
+    })
+}
+
+// Variable global para almacenar el HTML original del contenedor de mods
+let originalModsContainerHTML = null
+
+/**
  * Prepare the Mods tab for display.
  */
 async function prepareModsTab(first){
-    // Si hay instalación custom, ocultar el tab de Mods ya que no aplica
     const selectedInstallId = ConfigManager.getSelectedInstallation()
     const modsTab = document.getElementById('settingsTabMods')
     const modsNavItem = document.querySelector('[forTab="settingsTabMods"]')
+    const modsContainer = document.getElementById('settingsModsContainer')
     
+    // Guardar el HTML original la primera vez
+    if(!originalModsContainerHTML && modsContainer) {
+        originalModsContainerHTML = modsContainer.innerHTML
+    }
+    
+    // Siempre mostrar el tab de Mods
+    if(modsTab) modsTab.style.display = ''
+    if(modsNavItem) modsNavItem.style.display = ''
+    
+    // Si hay instalación custom seleccionada, usar sistema de gestión local
     if(selectedInstallId) {
-        // Ocultar tab de Mods para instalaciones custom
-        if(modsTab) modsTab.style.display = 'none'
-        if(modsNavItem) modsNavItem.style.display = 'none'
-        return
-    } else {
-        // Mostrar tab de Mods para servidores TECNILAND
-        if(modsTab) modsTab.style.display = ''
-        if(modsNavItem) modsNavItem.style.display = ''
+        const OptiFineVersions = require('./assets/js/optifineversions')
+        
+        // Caso 1: Auto-profile (OptiFine) - mostrar mensaje "Mods No Disponibles"
+        if(OptiFineVersions.isAutoProfileId(selectedInstallId)) {
+            const autoProfile = await OptiFineVersions.getAutoProfileById(selectedInstallId)
+            if(modsContainer && autoProfile) {
+                modsContainer.innerHTML = `
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 400px; padding: 2rem; text-align: center;">
+                        <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" style="margin-bottom: 1.5rem;">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                        <h3 style="color: rgba(255,255,255,0.8); margin-bottom: 1rem; font-size: 1.2rem; font-weight: 600;">Mods No Disponibles</h3>
+                        <p style="color: rgba(255,255,255,0.6); max-width: 420px; line-height: 1.6;">
+                            La instalación <strong>${autoProfile.name}</strong> utiliza <strong>OptiFine</strong>, que no soporta carga de mods.<br><br>
+                            Para usar mods, crea una instalación con <strong>Forge</strong>, <strong>Fabric</strong>, <strong>Quilt</strong> o <strong>NeoForge</strong> desde el Editor de Instalaciones.
+                        </p>
+                    </div>
+                `
+            }
+            return
+        }
+        
+        // Caso 2: Instalación custom regular
+        const install = ConfigManager.getInstallation(selectedInstallId)
+        
+        if(install) {
+            // Detectar tipo de loader
+            const loaderValue = install.loader || install.modLoader
+            let loaderType = 'vanilla'
+            
+            if (loaderValue) {
+                if (typeof loaderValue === 'string') {
+                    loaderType = loaderValue.toLowerCase()
+                } else if (typeof loaderValue === 'object' && loaderValue.type) {
+                    loaderType = loaderValue.type.toLowerCase()
+                }
+            }
+            
+            // Si es vanilla u optifine, mostrar mensaje de no disponible
+            if(loaderType === 'vanilla' || loaderType === 'optifine') {
+                if(modsContainer) {
+                    modsContainer.innerHTML = `
+                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 400px; padding: 2rem; text-align: center;">
+                            <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" style="margin-bottom: 1.5rem;">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="8" x2="12" y2="12"></line>
+                                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                            </svg>
+                            <h3 style="color: rgba(255,255,255,0.8); margin-bottom: 1rem; font-size: 1.2rem; font-weight: 600;">Mods No Disponibles</h3>
+                            <p style="color: rgba(255,255,255,0.6); max-width: 420px; line-height: 1.6;">
+                                La instalación <strong>${install.name || install.id}</strong> utiliza <strong>${loaderType === 'vanilla' ? 'Vanilla' : 'OptiFine'}</strong>, que no soporta carga de mods.<br><br>
+                                Para usar mods, crea una instalación con <strong>Forge</strong>, <strong>Fabric</strong>, <strong>Quilt</strong> o <strong>NeoForge</strong> desde el Editor de Instalaciones.
+                            </p>
+                        </div>
+                    `
+                }
+                return
+            }
+            
+            // Si tiene loader (forge/fabric/quilt/neoforge), mostrar gestión local de mods
+            const modsDir = getModsDirectory(selectedInstallId)
+            const mods = await scanLocalMods(modsDir)
+            renderLocalModsUI(mods, modsDir, install.name || install.id)
+            return
+        }
+    }
+    
+    // Sistema original de TECNILAND: restaurar HTML original si fue modificado
+    if(modsContainer && originalModsContainerHTML) {
+        modsContainer.innerHTML = originalModsContainerHTML
     }
     
     await resolveModsForUI()
@@ -1530,13 +2544,14 @@ function bindRangeSlider(){
             document.onmousemove = (e) => {
 
                 // Distance from the beginning of the bar in pixels.
-                const diff = e.pageX - v.offsetLeft - track.offsetWidth/2
+                const rect = v.getBoundingClientRect()
+                const diff = e.clientX - rect.left - track.offsetWidth/2
                 
                 // Don't move the track off the bar.
-                if(diff >= 0 && diff <= v.offsetWidth-track.offsetWidth/2){
+                if(diff >= 0 && diff <= rect.width - track.offsetWidth/2){
 
                     // Convert the difference to a percentage.
-                    const perc = (diff/v.offsetWidth)*100
+                    const perc = (diff/rect.width)*100
                     // Calculate the percentage of the closest notch.
                     const notch = Number(perc/sliderMeta.inc).toFixed(0)*sliderMeta.inc
 
@@ -1634,6 +2649,12 @@ async function populateJavaExecDetails(execPath){
         }
     }
 
+    // Si no hay ejecutable configurado, mostrar mensaje informativo
+    if(!execPath) {
+        settingsJavaExecDetails.innerHTML = '<span style="color: rgba(255,255,255,0.6)">Java se detectará y configurará automáticamente al lanzar el juego por primera vez.</span>'
+        return
+    }
+
     const details = await validateSelectedJvm(ensureJavaDirIsRoot(execPath), effectiveJavaOptions.supported)
 
     if(details != null) {
@@ -1680,6 +2701,9 @@ function bindMinMaxRam(javaOptions) {
  * Prepare the Java tab for display.
  */
 async function prepareJavaTab(){
+    // Populate installation context (visual info only)
+    await populateJavaInstallationContext()
+    
     // Poblar información del servidor/instalación seleccionada
     await loadSelectedServerOnModsTab()
     
@@ -1729,6 +2753,22 @@ const settingsAboutChangelogButton = settingsTabAbout.getElementsByClassName('se
 document.getElementById('settingsAboutDevToolsButton').onclick = (e) => {
     let window = remote.getCurrentWindow()
     window.toggleDevTools()
+}
+
+// Bind the launcher logs button.
+document.getElementById('settingsAboutLauncherLogsButton').onclick = async (e) => {
+    e.preventDefault()
+    const { shell } = require('electron')
+    const { ipcRenderer } = require('electron')
+    
+    try {
+        const logDir = await ipcRenderer.invoke('logger-get-directory')
+        if (logDir) {
+            shell.openPath(logDir)
+        }
+    } catch(err) {
+        console.error('Error al abrir carpeta de logs:', err)
+    }
 }
 
 /**
@@ -1813,15 +2853,31 @@ function prepareAboutTab(){
  * Update Tab
  */
 
-const settingsTabUpdate            = document.getElementById('settingsTabUpdate')
-const settingsUpdateTitle          = document.getElementById('settingsUpdateTitle')
-const settingsUpdateVersionCheck   = document.getElementById('settingsUpdateVersionCheck')
-const settingsUpdateVersionTitle   = document.getElementById('settingsUpdateVersionTitle')
-const settingsUpdateVersionValue   = document.getElementById('settingsUpdateVersionValue')
-const settingsUpdateChangelogTitle = settingsTabUpdate.getElementsByClassName('settingsChangelogTitle')[0]
-const settingsUpdateChangelogText  = settingsTabUpdate.getElementsByClassName('settingsChangelogText')[0]
-const settingsUpdateChangelogCont  = settingsTabUpdate.getElementsByClassName('settingsChangelogContainer')[0]
-const settingsUpdateActionButton   = document.getElementById('settingsUpdateActionButton')
+// Declarar selectores del DOM primero (antes de funciones que los usan)
+let settingsTabUpdate
+let settingsUpdateTitle
+let settingsUpdateVersionCheck
+let settingsUpdateVersionTitle
+let settingsUpdateVersionValue
+let settingsUpdateChangelogTitle
+let settingsUpdateChangelogText
+let settingsUpdateChangelogCont
+let settingsUpdateActionButton
+
+// Inicializar selectores cuando el DOM esté listo
+function initUpdateTabElements() {
+    settingsTabUpdate = document.getElementById('settingsTabUpdate')
+    if (settingsTabUpdate) {
+        settingsUpdateTitle = document.getElementById('settingsUpdateTitle')
+        settingsUpdateVersionCheck = document.getElementById('settingsUpdateVersionCheck')
+        settingsUpdateVersionTitle = document.getElementById('settingsUpdateVersionTitle')
+        settingsUpdateVersionValue = document.getElementById('settingsUpdateVersionValue')
+        settingsUpdateChangelogTitle = settingsTabUpdate.getElementsByClassName('settingsChangelogTitle')[0]
+        settingsUpdateChangelogText = settingsTabUpdate.getElementsByClassName('settingsChangelogText')[0]
+        settingsUpdateChangelogCont = settingsTabUpdate.getElementsByClassName('settingsChangelogContainer')[0]
+        settingsUpdateActionButton = document.getElementById('settingsUpdateActionButton')
+    }
+}
 
 /**
  * Update the properties of the update action button.
@@ -1831,6 +2887,7 @@ const settingsUpdateActionButton   = document.getElementById('settingsUpdateActi
  * @param {function} handler Optional. New button event handler.
  */
 function settingsUpdateButtonStatus(text, disabled = false, handler = null){
+    if (!settingsUpdateActionButton) return
     settingsUpdateActionButton.innerHTML = text
     settingsUpdateActionButton.disabled = disabled
     if(handler != null){
@@ -1844,11 +2901,13 @@ function settingsUpdateButtonStatus(text, disabled = false, handler = null){
  * @param {Object} data The update data.
  */
 function populateSettingsUpdateInformation(data){
+    if (!settingsUpdateTitle) return // Guard clause si no se inicializó
+    
     if(data != null){
         settingsUpdateTitle.innerHTML = isPrerelease(data.version) ? Lang.queryJS('settings.updates.newPreReleaseTitle') : Lang.queryJS('settings.updates.newReleaseTitle')
-        settingsUpdateChangelogCont.style.display = null
-        settingsUpdateChangelogTitle.innerHTML = data.releaseName
-        settingsUpdateChangelogText.innerHTML = data.releaseNotes
+        if (settingsUpdateChangelogCont) settingsUpdateChangelogCont.style.display = null
+        if (settingsUpdateChangelogTitle) settingsUpdateChangelogTitle.innerHTML = data.releaseName
+        if (settingsUpdateChangelogText) settingsUpdateChangelogText.innerHTML = data.releaseNotes
         populateVersionInformation(data.version, settingsUpdateVersionValue, settingsUpdateVersionTitle, settingsUpdateVersionCheck)
         
         if(process.platform === 'darwin'){
@@ -1860,7 +2919,7 @@ function populateSettingsUpdateInformation(data){
         }
     } else {
         settingsUpdateTitle.innerHTML = Lang.queryJS('settings.updates.latestVersionTitle')
-        settingsUpdateChangelogCont.style.display = 'none'
+        if (settingsUpdateChangelogCont) settingsUpdateChangelogCont.style.display = 'none'
         populateVersionInformation(remote.app.getVersion(), settingsUpdateVersionValue, settingsUpdateVersionTitle, settingsUpdateVersionCheck)
         settingsUpdateButtonStatus(Lang.queryJS('settings.updates.checkForUpdatesButton'), false, () => {
             if(!isDev){
@@ -1877,6 +2936,7 @@ function populateSettingsUpdateInformation(data){
  * @param {Object} data The update data.
  */
 function prepareUpdateTab(data = null){
+    initUpdateTabElements() // Inicializar elementos del DOM primero
     populateSettingsUpdateInformation(data)
 }
 
@@ -1895,6 +2955,8 @@ async function prepareSettings(first = false) {
         initSettingsValidators()
         prepareUpdateTab()
     } else {
+        // Cada vez que se abre Settings (no solo first time), resetear a "Cuenta"
+        resetSettingsTabsToDefault()
         await prepareModsTab()
     }
     await initSettingsValues()

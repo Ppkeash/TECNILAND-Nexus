@@ -91,6 +91,9 @@ const DEFAULT_CONFIG = {
             showLiveLogs: false,
             dataDirectory: dataPath,
             language: 'es_ES'
+        },
+        java: {
+            additionalJvmArgs: []  // Global JVM args (new)
         }
     },
     newsCache: {
@@ -446,6 +449,44 @@ exports.getOfflineAccounts = function() {
 }
 
 /**
+ * Get the skin data for an offline account.
+ * 
+ * @param {string} uuid The UUID of the offline account.
+ * @returns {{path: string|null, model: string, lastUpdated: number|null}|null} The skin data or null.
+ */
+exports.getOfflineAccountSkin = function(uuid) {
+    const account = config.authenticationDatabase[uuid]
+    if (account && account.type === 'offline') {
+        return account.skin || null
+    }
+    return null
+}
+
+/**
+ * Set the skin data for an offline account.
+ * 
+ * @param {string} uuid The UUID of the offline account.
+ * @param {{path: string|null, model: string, lastUpdated: number|null}|null} skinData The skin data to set, or null to clear.
+ * @returns {boolean} True if the skin was set successfully.
+ */
+exports.setOfflineAccountSkin = function(uuid, skinData) {
+    const account = config.authenticationDatabase[uuid]
+    if (account && account.type === 'offline') {
+        if (skinData === null) {
+            delete account.skin
+        } else {
+            account.skin = {
+                path: skinData.path || null,
+                model: skinData.model || 'classic',
+                lastUpdated: skinData.lastUpdated || Date.now()
+            }
+        }
+        return true
+    }
+    return false
+}
+
+/**
  * Remove an authenticated account from the database. If the account
  * was also the selected account, a new one will be selected. If there
  * are no accounts, the selected account will be null.
@@ -724,6 +765,34 @@ exports.setJVMOptions = function(serverid, jvmOptions){
     config.javaConfig[serverid].jvmOptions = jvmOptions
 }
 
+// Global JVM Options (NEW - preferred method)
+
+/**
+ * Retrieve the global additional arguments for JVM initialization.
+ * These apply to all installations/servers.
+ * 
+ * @returns {Array.<string>} An array of the global additional arguments for JVM initialization.
+ */
+exports.getGlobalJVMOptions = function(){
+    if(!config.settings.java){
+        config.settings.java = {}
+    }
+    return config.settings.java.additionalJvmArgs || []
+}
+
+/**
+ * Set the global additional arguments for JVM initialization.
+ * These apply to all installations/servers.
+ * 
+ * @param {Array.<string>} jvmOptions An array of the new global additional arguments for JVM initialization.
+ */
+exports.setGlobalJVMOptions = function(jvmOptions){
+    if(!config.settings.java){
+        config.settings.java = {}
+    }
+    config.settings.java.additionalJvmArgs = jvmOptions
+}
+
 // Game Settings
 
 /**
@@ -975,6 +1044,16 @@ exports.addInstallation = function(installation){
         return false
     }
     
+    // Crear la carpeta de instancia inmediatamente
+    try {
+        const instancePath = path.join(exports.getInstanceDirectory(), installation.id)
+        fs.ensureDirSync(instancePath)
+        logger.debug(`Instance directory created: ${instancePath}`)
+    } catch(err) {
+        logger.error(`Failed to create instance directory: ${err.message}`)
+        // No bloquear la creación, solo log
+    }
+    
     config.installations.push(installation)
     logger.info(`Installation added: ${installation.name} (${installation.id})`)
     return true
@@ -998,8 +1077,32 @@ exports.updateInstallation = function(id, updates){
         return false
     }
     
-    // Merge updates with existing installation
-    config.installations[index] = { ...config.installations[index], ...updates }
+    const existing = config.installations[index]
+    
+    // Merge updates carefully to preserve nested objects
+    if (updates.name !== undefined) {
+        existing.name = updates.name
+    }
+    if (updates.loader !== undefined) {
+        existing.loader = { ...existing.loader, ...updates.loader }
+    }
+    if (updates.optifine !== undefined) {
+        existing.optifine = updates.optifine
+    }
+    if (updates.modules !== undefined) {
+        existing.modules = updates.modules
+    }
+    if (updates.icon !== undefined) {
+        existing.icon = updates.icon
+    }
+    if (updates.javaOptions !== undefined) {
+        existing.javaOptions = updates.javaOptions
+    }
+    if (updates.serverAddress !== undefined) {
+        existing.serverAddress = updates.serverAddress
+    }
+    
+    config.installations[index] = existing
     logger.info(`Installation updated: ${id}`)
     return true
 }

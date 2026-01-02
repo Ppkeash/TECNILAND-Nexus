@@ -10,7 +10,7 @@ usernamePlaceholder = "Nombre de Usuario"
 usernameEditButton = "Editar"
 settingsTooltip = "Configuración"
 serverStatus = "SERVIDOR"
-serverStatusPlaceholder = "DESCONECTADO"
+serverStatusPlaceholder = "OFF"
 mojangStatus = "ESTADO DE MOJANG"
 mojangStatusTooltipTitle = "Servicios"
 mojangStatusNETitle = "No&nbsp;Esenciales"
@@ -186,7 +186,7 @@ loading = "Cargando.."
 
 [js.landing.serverStatus]
 server = "SERVIDOR"
-offline = "DESCONECTADO"
+offline = "OFF"
 players = "JUGADORES"
 
 [js.landing.systemScan]
@@ -265,6 +265,7 @@ maintenanceContent = """<div style="font-family: 'Segoe UI', Arial, sans-serif; 
 <li>Soporte para Fabric, Quilt y NeoForge</li>
 <li>Servidores TECNILAND preconfigurados</li>
 <li>Sistema de noticias dinámico</li>
+<li>Integración para instalar optifine</li>
 </ul>
 
 <p style="margin-top: 20px; color: #9E9E9E;">¿Encontraste un bug? Reportalo en <a href="https://github.com/Ppkeash/TECNILAND-Nexus/issues" style="color: #4CAF50;">GitHub Issues</a></p>
@@ -351,6 +352,10 @@ experimentalLoadersWarningTitle = "⚠️ Loaders Experimentales"
 experimentalLoadersWarningMessage = "Si eres desarrollador y deseas contribuir con la integración correcta de Fabric, Quilt y NeoForge, adelante.<br><br>De lo contrario, estos loaders <strong>no funcionarán correctamente</strong> porque aún no se implementan completamente.<br><br><strong>Solo activa esto si sabes lo que haces.</strong>"
 experimentalLoadersConfirm = "Entendido, Activar"
 experimentalLoadersCancel = "Cancelar"
+neoforgeMaintenanceTitle = "🚧 NeoForge en Modo Mantenimiento"
+neoforgeMaintenanceMessage = "<strong>NeoForge 1.20.4 está en modo mantenimiento</strong> debido a inestabilidad crítica:<br><br>❌ <strong>Problemas conocidos:</strong><br>• Crashes frecuentes con módulos JPMS<br>• Requiere Java 17 exacto (no acepta 21/22)<br>• Requiere workarounds complejos de JAR hiding<br><br>✅ <strong>RECOMENDACIÓN:</strong> Usar Forge estable (1.20.1 o 1.20.6)<br><br>⚠️ Si continúas, deberás confirmar esta advertencia en <strong>cada lanzamiento</strong>."
+neoforgeMaintenanceCancel = "Cancelar Lanzamiento"
+neoforgeMaintenanceTryAnyway = "Intentar de Todos Modos"
 
 [js.uibinder.startup]
 fatalErrorTitle = "Error Fatal: No se Puede Cargar el Índice de Distribución"
@@ -463,3 +468,34 @@ emptyMessage = "No hay instalaciones personalizadas.<br>Crea una nueva para come
 errorNotFound = "La instalación seleccionada no existe. Por favor, selecciona otra instalación."
 errorInvalid = "Instalación inválida: {errors}. Por favor, crea una nueva instalación."
 errorNoSelection = "No has seleccionado ninguna instalación o servidor. Por favor, selecciona uno antes de lanzar."
+# ==================== SKIN EDITOR ====================
+
+[ejs.settings.skinEditor]
+title = "Editor de Skin"
+noSkin = "Sin skin personalizada"
+model = "Modelo"
+modelClassic = "Clásico"
+modelSlim = "Delgado"
+changeSkin = "Cambiar Skin"
+removeSkin = "Eliminar Skin"
+gallery = "Galería de Skins"
+galleryEmpty = "Añade skins a la carpeta gallery/"
+pendingChanges = "Tienes cambios sin guardar"
+save = "Guardar"
+discard = "Descartar"
+close = "Cerrar"
+[ejs.settings.skinEditor.warning]
+title = "⚠️ Solo preview en el launcher"
+message = "Las skins personalizadas actualmente solo se muestran en el launcher. Para usarlas dentro de Minecraft vanilla/OptiFine necesitas un servidor de autenticación Yggdrasil (próximamente con Cuenta TECNILAND)."
+
+[js.settings.skinEditor]
+skinButton = "Skin"
+editSkinTooltip = "Editar skin de esta cuenta"
+dialogTitle = "Seleccionar archivo de skin"
+pngFiles = "Imágenes PNG"
+errorTitle = "Error de Skin"
+invalidImage = "El archivo seleccionado no es una imagen PNG válida."
+invalidDimensions = "Las dimensiones de la skin deben ser 64x64 o 64x32 píxeles. Imagen seleccionada: {width}x{height}"
+saveError = "Error al guardar la skin. Por favor, intenta de nuevo."
+okButton = "Aceptar"
+galleryEmpty = "Sin skins en galería"

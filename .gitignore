@@ -20,9 +20,13 @@
 /logs/
 /LOGS/
 *.log
+launcher-*.log
+log_errores*.txt
 
 # Development files
 distribution-local.json
+test-results.json
+test-loaders.js
 
 # OS-specific
 .DS_Store

@@ -402,7 +402,7 @@
             <div class="llv-header">
                 <div class="llv-title">
                     <span>📋</span>
-                    <span>LOGS EN VIVO</span>
+                    <span>LOGS</span>
                     <span class="llv-status idle" id="llvStatus">● Idle</span>
                 </div>
             </div>

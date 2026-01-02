@@ -14,11 +14,11 @@
 
         <div id="serverSelectList">
             <!-- Lista de instalaciones personalizadas -->
-            <div id="installationSelectListScrollable" style="display: block;">
+            <div id="installationSelectListScrollable" class="scrollbar-hidden" style="display: block;">
                 <!-- Installation listings populated here. -->
             </div>
             <!-- Lista de servidores TECNILAND -->
-            <div id="serverSelectListScrollable" style="display: none;">
+            <div id="serverSelectListScrollable" class="scrollbar-hidden" style="display: none;">
                 <!-- Server listings populated here. -->
             </div>
         </div>
@@ -39,7 +39,7 @@
     </div>
 
     <!-- Installation Editor Panel (inline) -->
-    <div id="installationEditorContent" style="display: none;">
+    <div id="installationEditorContent" class="scrollbar-hidden" style="display: none;">
         <span id="installationEditorHeader" style="display: block; text-align: center; font-size: 24px; font-weight: 600; margin-bottom: 10px;">✨ Nueva Instalación</span>
         <p style="text-align: center; opacity: 0.8; margin-bottom: 25px; font-size: 14px;">Crea una instalación personalizada con tu mod loader favorito</p>
 
@@ -70,6 +70,7 @@
                 <select id="installationEditorMcVersion" required>
                     <option value="">Cargando versiones...</option>
                 </select>
+                <small id="installationEditorMcVersionInfo" style="display: none; color: rgba(255, 255, 255, 0.6); font-size: 11px; margin-top: 4px; display: block;"></small>
             </div>
 
             <!-- Versión del Loader -->
@@ -95,7 +96,7 @@
     <div id="accountSelectContent" style="display: none;">
         <span id="accountSelectHeader"><%- lang('overlay.accountSelectHeader') %></span>
         <div id="accountSelectList">
-            <div id="accountSelectListScrollable">
+            <div id="accountSelectListScrollable" class="scrollbar-hidden">
                 <!-- Accounts populated here. -->
             </div>
         </div>
@@ -116,5 +117,140 @@
             </div>
         </div>
     </div>
+
+    <!-- ==================== SKIN EDITOR OVERLAY ==================== -->
+    <!-- 
+        Editor de Skin para cuentas offline de TECNILAND Nexus.
+        Preview 2.5D con canvas (Option B futura: skinview3d para 3D completo).
+        Estructura de carpetas:
+        - tecniland/skins/accounts/<uuid>.png (skin activa)
+        - tecniland/skins/gallery/*.png (galería compartida)
+    -->
+    <div id="skinEditorContent" style="display: none;">
+        <div class="skinEditorHeader">
+            <span id="skinEditorTitle"><%- lang('settings.skinEditor.title') %></span>
+            <span id="skinEditorUsername" class="skinEditorSubtitle"></span>
+        </div>
+
+        <!-- Advertencia sobre limitación técnica de skins in-game -->
+        <div class="skinEditorWarning">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <div class="skinEditorWarningText">
+                <strong><%- lang('settings.skinEditor.warning.title') %></strong>
+                <p><%- lang('settings.skinEditor.warning.message') %></p>
+            </div>
+        </div>
+
+        <div class="skinEditorMain">
+            <!-- Preview del personaje -->
+            <div class="skinEditorPreviewSection">
+                <div class="skinEditorPreviewContainer">
+                    <canvas id="skinEditorCanvas" width="128" height="160"></canvas>
+                    <div id="skinEditorNoSkin" class="skinEditorPlaceholder">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                        <span><%- lang('settings.skinEditor.noSkin') %></span>
+                    </div>
+                </div>
+                
+                <!-- Selector de modelo -->
+                <div class="skinEditorModelSelector">
+                    <span class="skinEditorModelLabel"><%- lang('settings.skinEditor.model') %></span>
+                    <div class="skinEditorModelButtons">
+                        <button class="skinEditorModelBtn active" data-model="classic">
+                            <span class="skinEditorModelIcon">👤</span>
+                            <span><%- lang('settings.skinEditor.modelClassic') %></span>
+                        </button>
+                        <button class="skinEditorModelBtn" data-model="slim">
+                            <span class="skinEditorModelIcon">👤</span>
+                            <span><%- lang('settings.skinEditor.modelSlim') %></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Acciones y galería -->
+            <div class="skinEditorActionsSection">
+                <button id="skinEditorChangeSkin" class="skinEditorBtn skinEditorBtnPrimary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <span><%- lang('settings.skinEditor.changeSkin') %></span>
+                </button>
+
+                <button id="skinEditorRemoveSkin" class="skinEditorBtn skinEditorBtnDanger" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                    <span><%- lang('settings.skinEditor.removeSkin') %></span>
+                </button>
+
+                <!-- Galería de skins -->
+                <div class="skinEditorGallerySection">
+                    <span class="skinEditorGalleryTitle"><%- lang('settings.skinEditor.gallery') %></span>
+                    <div id="skinEditorGalleryGrid" class="skinEditorGalleryGrid">
+                        <!-- Miniaturas de la galería se cargan dinámicamente -->
+                        <div class="skinEditorGalleryEmpty">
+                            <span><%- lang('settings.skinEditor.galleryEmpty') %></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mensaje de estado (cambios pendientes) -->
+        <div id="skinEditorPendingChanges" class="skinEditorPendingChanges" style="display: none;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <span><%- lang('settings.skinEditor.pendingChanges') %></span>
+        </div>
+
+        <!-- Botones de acción -->
+        <div id="skinEditorActions" class="skinEditorFooterActions">
+            <button id="skinEditorSave" class="skinEditorBtn skinEditorBtnSuccess" style="display: none;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span><%- lang('settings.skinEditor.save') %></span>
+            </button>
+            <button id="skinEditorDiscard" class="skinEditorBtn skinEditorBtnSecondary" style="display: none;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+                <span><%- lang('settings.skinEditor.discard') %></span>
+            </button>
+            <button id="skinEditorClose" class="skinEditorBtn skinEditorBtnSecondary">
+                <span><%- lang('settings.skinEditor.close') %></span>
+            </button>
+        </div>
+    </div>
+    <!-- ==================== FIN SKIN EDITOR OVERLAY ==================== -->
+
     <script src="./assets/js/scripts/overlay.js"></script>
+</div>
+
+<!-- Menú contextual personalizado para instalaciones -->
+<div id="installationContextMenu" class="contextMenu" style="display: none;">
+    <div class="contextMenuItem" id="contextMenuEdit">
+        <span class="contextMenuIcon">✏️</span>
+        <span class="contextMenuLabel">Editar instalación</span>
+    </div>
+    <div class="contextMenuDivider"></div>
+    <div class="contextMenuItem contextMenuDanger" id="contextMenuDelete">
+        <span class="contextMenuIcon">🗑️</span>
+        <span class="contextMenuLabel">Eliminar instalación</span>
+    </div>
 </div>

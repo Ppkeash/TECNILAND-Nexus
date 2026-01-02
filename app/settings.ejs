@@ -22,8 +22,8 @@
             </div>
         </div>
     </div>
-    <div id="settingsContainerRight">
-        <div id="settingsTabAccount" class="settingsTab">
+    <div id="settingsContainerRight" class="scrollbar-hidden">
+        <div id="settingsTabAccount" class="settingsTab" active>
             <div class="settingsTabHeader">
                 <span class="settingsTabHeaderText"><%- lang('settings.tabAccountHeaderText') %></span>
                 <span class="settingsTabHeaderDesc"><%- lang('settings.tabAccountHeaderDesc') %></span>
@@ -87,7 +87,7 @@
                 </div>
             </div>
         </div>
-        <div id="settingsTabMinecraft" class="settingsTab" style="display: none;">
+        <div id="settingsTabMinecraft" class="settingsTab">
             <div class="settingsTabHeader">
                 <span class="settingsTabHeaderText"><%- lang('settings.minecraftTabHeaderText') %></span>
                 <span class="settingsTabHeaderDesc"><%- lang('settings.minecraftTabHeaderDesc') %></span>
@@ -135,7 +135,7 @@
                 </div>
             </div>
         </div>
-        <div id="settingsTabMods" class="settingsTab" style="display: none;">
+        <div id="settingsTabMods" class="settingsTab">
             <div class="settingsTabHeader">
                 <span class="settingsTabHeaderText"><%- lang('settings.tabModsHeaderText') %></span>
                 <span class="settingsTabHeaderDesc"><%- lang('settings.tabModsHeaderDesc') %></span>
@@ -177,7 +177,7 @@
                         <button id="settingsShaderpackButton"> + </button>
                         <div class="settingsSelectContainer">
                             <div class="settingsSelectSelected" id="settingsShadersSelected"><%- lang('settings.selectShaderpack') %></div>
-                            <div class="settingsSelectOptions" id="settingsShadersOptions" hidden>
+                            <div class="settingsSelectOptions scrollbar-hidden" id="settingsShadersOptions" hidden>
 
                             </div>
                         </div>
@@ -185,7 +185,7 @@
                 </div>
             </div>
         </div>
-        <div id="settingsTabJava" class="settingsTab" style="display: none;">
+        <div id="settingsTabJava" class="settingsTab">
             <div class="settingsTabHeader">
                 <span class="settingsTabHeaderText"><%- lang('settings.tabJavaHeaderText') %></span>
                 <span class="settingsTabHeaderDesc"><%- lang('settings.tabJavaHeaderDesc') %></span>
@@ -198,6 +198,23 @@
                     <div class="settingsSwitchServerContent">
                         <button class="settingsSwitchServerButton"><%- lang('settings.switchServerButton') %></button>
                     </div>
+                </div>
+            </div>
+            <div id="settingsJavaInstallationContext">
+                <div id="settingsJavaInstallationContextTitle">Instalación Activa</div>
+                <div id="settingsJavaInstallationContextContent">
+                    <span class="settingsJavaContextItem">
+                        <strong>Nombre:</strong> <span id="settingsJavaInstallName">-</span>
+                    </span>
+                    <span class="settingsJavaContextItem">
+                        <strong>Loader:</strong> <span id="settingsJavaInstallLoader">-</span>
+                    </span>
+                    <span class="settingsJavaContextItem">
+                        <strong>Minecraft:</strong> <span id="settingsJavaInstallVersion">-</span>
+                    </span>
+                </div>
+                <div id="settingsJavaInstallationContextNote">
+                    Nota: Las opciones adicionales de JVM se aplican globalmente a todas las instalaciones.
                 </div>
             </div>
             <div id="settingsMemoryContainer">
@@ -282,12 +299,12 @@
                             </g>
                         </svg>
                     </div>
-                    <input id="settingsJVMOptsVal" cValue="JVMOptions" serverDependent type="text">
+                    <input id="settingsJVMOptsVal" cValue="GlobalJVMOptions" type="text">
                 </div>
                 <div id="settingsJVMOptsDesc"><%- lang('settings.jvmOptsDesc') %><br><a href="#" id="settingsJvmOptsLink"><!-- Available Options --></a></div>
             </div>
         </div>
-        <div id="settingsTabLauncher" class="settingsTab" style="display: none;">
+        <div id="settingsTabLauncher" class="settingsTab">
             <div class="settingsTabHeader">
                 <span class="settingsTabHeaderText"><%- lang('settings.launcherTabHeaderText') %></span>
                 <span class="settingsTabHeaderDesc"><%- lang('settings.launcherTabHeaderDesc') %></span>
@@ -343,24 +360,12 @@
             <div class="settingsFieldContainer">
                 <div class="settingsFieldLeft">
                     <span class="settingsFieldTitle"><%- lang('settings.languageTitle') %></span>
-                    <span class="settingsFieldDesc"><%- lang('settings.showLegacyVersionsDesc') %></span>
-                </div>
-                <div class="settingsFieldRight">
-                    <label class="toggleSwitch">
-                        <input type="checkbox" cValue="ShowLegacyVersions">
-                        <span class="toggleSwitchSlider"></span>
-                    </label>
-                </div>
-            </div>
-            <div class="settingsFieldContainer">
-                <div class="settingsFieldLeft">
-                    <span class="settingsFieldTitle"><%- lang('settings.languageTitle') %></span>
                     <span class="settingsFieldDesc"><%- lang('settings.languageDesc') %></span>
                 </div>
                 <div class="settingsFieldRight">
                     <div class="settingsSelectContainer" style="width: 200px;">
                         <div class="settingsSelectSelected" id="settingsLanguageSelected">Español</div>
-                        <div class="settingsSelectOptions" id="settingsLanguageOptions" hidden>
+                        <div class="settingsSelectOptions scrollbar-hidden" id="settingsLanguageOptions" hidden>
                             <div value="es_ES" selected>Español</div>
                             <div value="en_US">English</div>
                         </div>
@@ -387,7 +392,7 @@
                 <div class="settingsFileSelDesc"><%- lang('settings.dataDirectoryDesc') %></div>
             </div>
         </div>
-        <div id="settingsTabAbout" class="settingsTab" style="display: none;">
+        <div id="settingsTabAbout" class="settingsTab">
             <div class="settingsTabHeader">
                 <span class="settingsTabHeaderText"><%- lang('settings.aboutTabHeaderText') %></span>
                 <span class="settingsTabHeaderDesc"><%- lang('settings.aboutTabHeaderDesc') %></span>
@@ -415,6 +420,7 @@
                     <!-- <a href="https://github.com/dscalzi/HeliosLauncher" id="settingsAboutSourceButton" class="settingsAboutButton">Original Source</a> -->
                     <a href="<%- lang('settings.supportLink') %>" id="settingsAboutSupportButton" class="settingsAboutButton"><%- lang('settings.support') %></a>
                     <a href="#" id="settingsAboutDevToolsButton" class="settingsAboutButton"><%- lang('settings.devToolsConsole') %></a>
+                    <a href="#" id="settingsAboutLauncherLogsButton" class="settingsAboutButton">Ver Logs del Launcher</a>
                 </div>
             </div>
             <div class="settingsChangelogContainer">
@@ -432,7 +438,7 @@
                 </div>
             </div>
         </div>
-        <div id="settingsTabUpdate" class="settingsTab" style="display: none;">
+        <div id="settingsTabUpdate" class="settingsTab">
             <div class="settingsTabHeader">
                 <span class="settingsTabHeaderText"><%- lang('settings.launcherUpdatesHeaderText') %></span>
                 <span class="settingsTabHeaderDesc"><%- lang('settings.launcherUpdatesHeaderDesc') %></span>

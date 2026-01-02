@@ -43,6 +43,9 @@ function generateInstallationId(name) {
  * @param {string} [config.loaderVersion] - Versión del loader (requerido para forge/fabric/quilt/neoforge)
  * @param {string} [config.icon] - URL o nombre del icono
  * @param {Array} [config.modules] - Módulos adicionales (mods)
+ * @param {Object} [config.optifine] - Configuración de OptiFine (solo para Vanilla)
+ * @param {boolean} [config.optifine.enabled] - Si OptiFine está habilitado
+ * @param {string} [config.optifine.versionId] - ID de la versión OptiFine detectada
  * @returns {Object} Objeto de instalación
  */
 exports.createInstallation = function(config) {
@@ -56,6 +59,12 @@ exports.createInstallation = function(config) {
         throw new Error(`loaderVersion es requerido para el loader tipo ${config.loaderType}`)
     }
 
+    // Validar OptiFine solo para Vanilla
+    if (config.optifine && config.optifine.enabled && config.loaderType !== LoaderType.VANILLA) {
+        logger.warn('OptiFine solo es compatible con instalaciones Vanilla, ignorando configuración OptiFine')
+        config.optifine = null
+    }
+
     // Crear objeto de instalación
     const installation = {
         id: generateInstallationId(config.name),
@@ -67,6 +76,11 @@ exports.createInstallation = function(config) {
             minecraftVersion: config.minecraftVersion,
             loaderVersion: config.loaderVersion || null
         },
+        // OptiFine: solo disponible para instalaciones Vanilla
+        optifine: config.optifine && config.loaderType === LoaderType.VANILLA ? {
+            enabled: config.optifine.enabled || false,
+            versionId: config.optifine.versionId || null
+        } : null,
         modules: config.modules || [],
         created: new Date().toISOString(),
         lastPlayed: null,
@@ -78,6 +92,9 @@ exports.createInstallation = function(config) {
     logger.info(`Instalación creada: ${installation.name} (${installation.id})`)
     logger.info(`  Loader: ${installation.loader.type} ${installation.loader.loaderVersion || ''}`)
     logger.info(`  Minecraft: ${installation.loader.minecraftVersion}`)
+    if (installation.optifine && installation.optifine.enabled) {
+        logger.info(`  OptiFine: ${installation.optifine.versionId}`)
+    }
 
     return installation
 }
@@ -100,7 +117,9 @@ exports.installationToServer = function(installation) {
         mainServer: false,
         autoconnect: installation.serverAddress != null,
         modules: generateModules(installation),
-        javaOptions: installation.javaOptions || getDefaultJavaOptions(installation.loader.minecraftVersion)
+        javaOptions: installation.javaOptions || getDefaultJavaOptions(installation.loader.minecraftVersion),
+        // Propagar información de OptiFine para el flujo de lanzamiento
+        optifine: installation.optifine || null
     }
 
     return server
@@ -143,6 +162,10 @@ function generateDescription(installation) {
     const loader = installation.loader
     
     if (loader.type === LoaderType.VANILLA) {
+        // Incluir OptiFine en la descripción si está habilitado
+        if (installation.optifine && installation.optifine.enabled && installation.optifine.versionId) {
+            return `Minecraft ${loader.minecraftVersion} + OptiFine`
+        }
         return `Minecraft ${loader.minecraftVersion}`
     } else {
         const loaderName = loader.type.charAt(0).toUpperCase() + loader.type.slice(1)
@@ -358,9 +381,158 @@ exports.getInstallationInfo = function(installation) {
         loader: installation.loader.type,
         minecraftVersion: installation.loader.minecraftVersion,
         loaderVersion: installation.loader.loaderVersion,
+        // Información de OptiFine
+        optifineEnabled: installation.optifine?.enabled || false,
+        optifineVersionId: installation.optifine?.versionId || null,
         created: new Date(installation.created).toLocaleDateString(),
         lastPlayed: installation.lastPlayed ? new Date(installation.lastPlayed).toLocaleDateString() : 'Nunca',
         playtime: `${playtimeHours}h ${playtimeMinutes}m`,
         playtimeSeconds: installation.playtime
+    }
+}
+
+/**
+ * Convertir un auto-profile (OptiFine detectado) a un servidor virtual
+ * 
+ * Este método crea un servidor virtual a partir de un auto-profile detectado
+ * en commonDir/versions. El servidor virtual usa el version.json de OptiFine
+ * TAL CUAL, sin modificaciones.
+ * 
+ * @param {Object} profile - Auto-profile de optifineversions.getAllInstalledProfiles()
+ * @param {string} profile.id - ID del auto-profile (ej: "autoprofile-optifine-1.20.1-OptiFine_HD_U_I6")
+ * @param {string} profile.type - Tipo: 'optifine'
+ * @param {string} profile.name - Nombre legible
+ * @param {string} profile.minecraftVersion - Versión base de Minecraft
+ * @param {string} profile.versionId - ID de la versión en versions/ (ej: "1.20.1-OptiFine_HD_U_I6")
+ * @returns {Object} Servidor virtual compatible con DistroAPI
+ */
+exports.autoProfileToServer = function(profile) {
+    const server = {
+        id: profile.id,
+        name: profile.name,
+        description: `Minecraft ${profile.minecraftVersion} con OptiFine`,
+        icon: 'https://optifine.net/images/logo.png',
+        version: profile.displayVersion || '1.0.0',
+        address: 'localhost:25565',
+        minecraftVersion: profile.minecraftVersion,
+        discord: null,
+        mainServer: false,
+        autoconnect: false,
+        modules: [], // Auto-profiles no tienen módulos adicionales
+        javaOptions: getDefaultJavaOptions(profile.minecraftVersion),
+        // ============================================================
+        // CLAVE: effectiveVersionId indica qué version.json usar
+        // ProcessBuilder usará esta versión directamente, respetando
+        // su mainClass, libraries y arguments TAL CUAL están definidos.
+        // ============================================================
+        effectiveVersionId: profile.versionId,
+        // Marcar como auto-profile para que el launcher sepa cómo manejarlo
+        isAutoProfile: true,
+        autoProfileType: profile.type
+    }
+
+    logger.info(`Auto-profile convertido a servidor virtual: ${profile.name}`)
+    logger.info(`  effectiveVersionId: ${profile.versionId}`)
+    logger.info(`  minecraftVersion: ${profile.minecraftVersion}`)
+
+    return server
+}
+
+/**
+ * Obtener el versionId efectivo de una instalación para lanzamiento
+ * Este es el ID de la versión que se usará en commonDir/versions/<versionId>
+ * 
+ * @param {Object} installation - Objeto de instalación
+ * @returns {string} versionId efectivo
+ */
+exports.getEffectiveVersionId = function(installation) {
+    const path = require('path')
+    const fs = require('fs-extra')
+    const ConfigManager = require('./configmanager')
+    
+    if (!installation || !installation.loader) {
+        return null
+    }
+    
+    const loader = installation.loader
+    
+    switch (loader.type) {
+        case LoaderType.VANILLA:
+            // Vanilla puro: minecraftVersion (ej: "1.20.1")
+            return loader.minecraftVersion
+            
+        case LoaderType.FORGE: {
+            // Forge: leer el version.json para obtener el ID real
+            try {
+                const loaderOnly = loader.loaderVersion.replace(`${loader.minecraftVersion}-`, '')
+                const forgeVersion = `${loader.minecraftVersion}-forge-${loaderOnly}`
+                const versionJsonPath = path.join(ConfigManager.getCommonDirectory(), 'versions', forgeVersion, `${forgeVersion}.json`)
+                
+                if (fs.existsSync(versionJsonPath)) {
+                    const versionData = fs.readJsonSync(versionJsonPath)
+                    return versionData.id || forgeVersion
+                }
+                
+                return forgeVersion
+            } catch(err) {
+                console.warn(`[InstallationManager] Error leyendo version.json de Forge: ${err.message}`)
+                const loaderOnly = loader.loaderVersion.replace(`${loader.minecraftVersion}-`, '')
+                return `${loader.minecraftVersion}-forge-${loaderOnly}`
+            }
+        }
+            
+        case LoaderType.FABRIC: {
+            // Fabric: formato fabric-loader-[version]-[mcVersion]
+            try {
+                const fabricVersion = `fabric-loader-${loader.loaderVersion}-${loader.minecraftVersion}`
+                const versionJsonPath = path.join(ConfigManager.getCommonDirectory(), 'versions', fabricVersion, `${fabricVersion}.json`)
+                
+                if (fs.existsSync(versionJsonPath)) {
+                    const versionData = fs.readJsonSync(versionJsonPath)
+                    return versionData.id || fabricVersion
+                }
+                
+                return fabricVersion
+            } catch(err) {
+                return `fabric-loader-${loader.loaderVersion}-${loader.minecraftVersion}`
+            }
+        }
+            
+        case LoaderType.QUILT: {
+            // Quilt: formato quilt-loader-[version]-[mcVersion]
+            try {
+                const quiltVersion = `quilt-loader-${loader.loaderVersion}-${loader.minecraftVersion}`
+                const versionJsonPath = path.join(ConfigManager.getCommonDirectory(), 'versions', quiltVersion, `${quiltVersion}.json`)
+                
+                if (fs.existsSync(versionJsonPath)) {
+                    const versionData = fs.readJsonSync(versionJsonPath)
+                    return versionData.id || quiltVersion
+                }
+                
+                return quiltVersion
+            } catch(err) {
+                return `quilt-loader-${loader.loaderVersion}-${loader.minecraftVersion}`
+            }
+        }
+            
+        case LoaderType.NEOFORGE: {
+            // NeoForge: formato neoforge-[version]
+            try {
+                const neoforgeVersion = `neoforge-${loader.loaderVersion}`
+                const versionJsonPath = path.join(ConfigManager.getCommonDirectory(), 'versions', neoforgeVersion, `${neoforgeVersion}.json`)
+                
+                if (fs.existsSync(versionJsonPath)) {
+                    const versionData = fs.readJsonSync(versionJsonPath)
+                    return versionData.id || neoforgeVersion
+                }
+                
+                return neoforgeVersion
+            } catch(err) {
+                return `neoforge-${loader.loaderVersion}`
+            }
+        }
+            
+        default:
+            return loader.minecraftVersion
     }
 }

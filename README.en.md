@@ -25,11 +25,13 @@
 
 We envision more than just a simple launcher: we're building an **ecosystem** where players and modders can enjoy modded Minecraft easily, intuitively, and reliably. With features like:
 
-- ✅ **Multi-Loader Support:** Forge fully integrated (Fabric, Quilt, NeoForge in development).
+- ✅ **Multi-Loader Support:** Forge fully integrated, Fabric/Quilt in development, **NeoForge in maintenance mode** (unstable).
 - ✅ **Automatic JavaManager:** Intelligent Java version management for each installation.
 - ✅ **Live Log Viewer:** Real-time logs panel with TECNILAND green/black aesthetic.
 - ✅ **TECNILAND Modpacks:** Pre-configured installations ready to play.
 - ✅ **Offline Accounts:** Full support for accounts without Microsoft.
+
+> 🚧 **IMPORTANT WARNING:** NeoForge 1.20.4 is in maintenance mode due to critical instability (frequent JPMS crashes, requires Java 17 exactly, complex workarounds). **We recommend using stable Forge (1.20.1/1.20.6).** If you attempt to use NeoForge, the launcher will require confirmation on every launch.
 
 We're in **Beta phase (0.x.x)**, meaning the launcher is functional and stable, but actively developed with new features arriving regularly.
 
@@ -110,6 +112,8 @@ We've thoroughly tested all Forge versions from Minecraft 1.13 to 1.21.x. Here a
 
 ### 📋 Phase 2: Multi-Loader (In Development)
 
+> 🚧 **IMPORTANT:** NeoForge 1.20.4 is in maintenance mode and not part of active development due to critical instability. See warning in [About TECNILAND Nexus](#about-tecniland-nexus) section.
+
 - [ ] **Fabric Support** - Complete Fabric loader integration.
   - Download Fabric installers.
   - Meta API for versions.
@@ -119,9 +123,11 @@ We've thoroughly tested all Forge versions from Minecraft 1.13 to 1.21.x. Here a
   - Integration similar to Fabric.
   - Compatibility with Fabric + Quilt-specific mods.
 
-- [ ] **NeoForge Support** - Modern Forge fork (1.20.2+).
-  - Similar pipeline to Forge with NeoForge endpoints.
-  - Library and JVM argument differences.
+- [x] **NeoForge: Maintenance gate implemented**
+  - ✅ Ephemeral gate active (confirmation every launch)
+  - ✅ Warning modal with instability details
+  - ✅ Recommendation to use stable Forge
+  - ❌ NOT actively developed until JPMS issues resolved
 
 - [ ] **Experimental Loaders Toggle** - Already implemented.
   - Hide Fabric, Quilt, NeoForge by default.
