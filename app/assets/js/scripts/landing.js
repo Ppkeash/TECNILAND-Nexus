@@ -99,7 +99,7 @@ function createServerMock(virtualServer) {
         effectiveJavaOptions: virtualServer.javaOptions || {
             supported: '>=8.x',
             suggestedMajor: 8,
-            distribution: 'ADOPTIUM'
+            distribution: null // Auto-detect by platform
         }
     }
 }
@@ -313,12 +313,12 @@ document.getElementById('launch_button').addEventListener('click', async e => {
             
             if (!java17) {
                 loggerLanding.warn('❌ Java 17 NOT FOUND in system')
-                loggerLanding.info('🔽 FORCING Java 17 download from Adoptium...')
+                loggerLanding.info('🔽 FORCING Java 17 download (auto-detect distribution)...')
                 
                 const neoForgeJavaOptions = {
                     supported: '17.x',
                     suggestedMajor: 17,
-                    distribution: 'ADOPTIUM'
+                    distribution: null // Auto-detect by platform
                 }
                 
                 await asyncSystemScanWithJavaManager(neoForgeJavaOptions, true, serverId, minecraftVersion)
@@ -719,10 +719,13 @@ async function asyncSystemScanWithJavaManager(effectiveJavaOptions, launchAfter 
  * Download Java with proper callback for auto-launch after download
  */
 async function downloadJavaWithCallback(effectiveJavaOptions, launchAfter = true, serverId = null, mcVersion = null) {
+    // Validate distribution before calling helios-core
+    const validatedDistribution = JavaManager.validateDistribution(effectiveJavaOptions.distribution)
+    
     const asset = await latestOpenJDK(
         effectiveJavaOptions.suggestedMajor,
         ConfigManager.getDataDirectory(),
-        effectiveJavaOptions.distribution
+        validatedDistribution
     )
     
     if (asset == null) {
@@ -878,12 +881,15 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true, serverI
 
 async function downloadJava(effectiveJavaOptions, launchAfter = true) {
 
+    // Validate distribution before calling helios-core
+    const validatedDistribution = JavaManager.validateDistribution(effectiveJavaOptions.distribution)
+
     // TODO Error handling.
     // asset can be null.
     const asset = await latestOpenJDK(
         effectiveJavaOptions.suggestedMajor,
         ConfigManager.getDataDirectory(),
-        effectiveJavaOptions.distribution)
+        validatedDistribution)
 
     if(asset == null) {
         throw new Error(Lang.queryJS('landing.downloadJava.findJdkFailure'))

@@ -2631,7 +2631,7 @@ async function populateJavaExecDetails(execPath){
             effectiveJavaOptions = {
                 supported: '>=8.x',
                 suggestedMajor: 8,
-                distribution: 'ADOPTIUM'
+                distribution: null // Auto-detect by platform
             }
         }
     } else {
@@ -2644,7 +2644,7 @@ async function populateJavaExecDetails(execPath){
             effectiveJavaOptions = {
                 supported: '>=8.x',
                 suggestedMajor: 8,
-                distribution: 'ADOPTIUM'
+                distribution: null // Auto-detect by platform
             }
         }
     }
@@ -2722,7 +2722,7 @@ async function prepareJavaTab(){
             effectiveJavaOptions = {
                 supported: '>=8.x',
                 suggestedMajor: 8,
-                distribution: 'ADOPTIUM'
+                distribution: null // Auto-detect by platform
             }
             javaOptions = effectiveJavaOptions
         }

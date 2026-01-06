@@ -27,6 +27,28 @@ const os = require('os')
  * IMPORTANTE: Forge 1.18+ funciona bien con Java 17-21
  * Solo Forge 1.16.5 y anteriores tienen problemas con Java 17+
  */
+/**
+ * Valid Java distributions supported by helios-core
+ * - TEMURIN: Eclipse Temurin (from Adoptium foundation)
+ * - CORRETTO: Amazon Corretto
+ * - null: Auto-detect by platform (recommended)
+ */
+const VALID_JAVA_DISTRIBUTIONS = ['TEMURIN', 'CORRETTO']
+
+/**
+ * Validate and sanitize Java distribution value
+ * @param {string|null} distribution - Distribution to validate
+ * @returns {string|null} Valid distribution or null for auto-detection
+ */
+function validateDistribution(distribution) {
+    if (!distribution) return null // null = auto by helios-core (TEMURIN on Win/Linux, CORRETTO on macOS)
+    if (!VALID_JAVA_DISTRIBUTIONS.includes(distribution)) {
+        logger.warn(`Invalid Java distribution '${distribution}'. Valid options: ${VALID_JAVA_DISTRIBUTIONS.join(', ')}. Falling back to auto-detection (null).`)
+        return null
+    }
+    return distribution
+}
+
 const JAVA_REQUIREMENTS = {
     // MC 1.21+ requiere Java 21
     '1.21.4': { min: 21, max: 23, recommended: 21 },
@@ -569,7 +591,7 @@ function generateEffectiveJavaOptions(mcVersion) {
     return {
         supported: supported,
         suggestedMajor: req.recommended,
-        distribution: 'ADOPTIUM'
+        distribution: null // Auto-detect by platform (TEMURIN on Win/Linux, CORRETTO on macOS)
     }
 }
 
@@ -627,8 +649,10 @@ module.exports = {
     invalidateCache,
     getDebugInfo,
     getJavaVersion,
+    validateDistribution,
     
     // Constantes
     JAVA_REQUIREMENTS,
-    DEFAULT_JAVA_REQUIREMENT
+    DEFAULT_JAVA_REQUIREMENT,
+    VALID_JAVA_DISTRIBUTIONS
 }
