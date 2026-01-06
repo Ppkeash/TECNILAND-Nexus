@@ -75,6 +75,7 @@ We've thoroughly tested all Forge versions from Minecraft 1.13 to 1.21.x. Here a
     - MC 1.20.5+ → Java 17/21.
   - Automatic Java download if unavailable.
   - Graceful fallback with clear user messages.
+  - **🔧 Critical Fix (January 2026):** Resolved a critical bug where the launcher crashed when attempting to automatically download Java on new PCs without Java installed. The error `Unknown distribution 'ADOPTIUM'` was caused because helios-core 2.2.4 only accepts `'TEMURIN'` or `'CORRETTO'`. The launcher now uses platform auto-detection (TEMURIN on Windows/Linux, CORRETTO on macOS) with defensive validation. See [JAVA_DOWNLOAD_FIX_REPORT.md](docs/JAVA_DOWNLOAD_FIX_REPORT.md) for complete technical details.
 
 - **Offline Accounts** - Complete account management without Microsoft:
   - Create local accounts with any username.

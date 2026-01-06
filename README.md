@@ -152,6 +152,8 @@ Minecraft inicia sin que el usuario haga nada
 
 **Beneficio:** Adiós a "Java version mismatch". El launcher arregla esto automáticamente.
 
+**🔧 Fix Crítico (Enero 2026):** Se resolvió un bug crítico donde el launcher crasheaba al intentar descargar Java automáticamente en PCs nuevas sin Java instalado. El error `Unknown distribution 'ADOPTIUM'` fue causado porque helios-core 2.2.4 solo acepta `'TEMURIN'` o `'CORRETTO'`. Ahora el launcher usa auto-detección por plataforma (TEMURIN en Windows/Linux, CORRETTO en macOS) con validación defensiva. Ver [JAVA_DOWNLOAD_FIX_REPORT.md](docs/JAVA_DOWNLOAD_FIX_REPORT.md) para detalles técnicos completos.
+
 ---
 
 #### 3. Cuentas Offline (Completado)
