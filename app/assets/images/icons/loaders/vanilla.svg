@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <!-- Vanilla Minecraft - Grass Block Style Icon -->
+  <rect x="2" y="2" width="20" height="20" rx="2" fill="#5D8731"/>
+  <rect x="2" y="2" width="20" height="8" rx="2" fill="#7CB342"/>
+  <rect x="4" y="10" width="4" height="4" fill="#8D6E63"/>
+  <rect x="10" y="10" width="4" height="4" fill="#795548"/>
+  <rect x="16" y="10" width="4" height="4" fill="#8D6E63"/>
+  <rect x="4" y="14" width="4" height="4" fill="#6D4C41"/>
+  <rect x="10" y="14" width="4" height="4" fill="#8D6E63"/>
+  <rect x="16" y="14" width="4" height="4" fill="#6D4C41"/>
+  <rect x="4" y="18" width="4" height="4" fill="#795548"/>
+  <rect x="10" y="18" width="4" height="4" fill="#6D4C41"/>
+  <rect x="16" y="18" width="4" height="4" fill="#8D6E63"/>
+</svg>

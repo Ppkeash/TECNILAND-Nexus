@@ -11,6 +11,8 @@ const ConfigManager        = require('./assets/js/configmanager')
 const InstallationManager  = require('./assets/js/installationmanager')
 const VersionAPI           = require('./assets/js/versionapi')
 const { DistroAPI }        = require('./assets/js/distromanager')
+const DiscordWrapper       = require('./assets/js/discordwrapper')
+// NOTA: Lang ya está disponible globalmente desde uicore.js
 
 let rscShouldLoad = false
 let fatalStartupError = false
@@ -129,6 +131,45 @@ async function restoreSelectedServerOrInstallation(data) {
     }
 }
 
+/**
+ * Inicializar Discord Rich Presence para el estado "launcher idle"
+ * Muestra presencia cuando el launcher está abierto pero no se está jugando.
+ * 
+ * DECISIÓN DE DISEÑO:
+ * El launcher SOLO maneja este estado idle.
+ * La presencia in-game se delega a mods como CraftPresence.
+ * 
+ * @param {Object} data - Distribution index con configuración Discord
+ */
+function initLauncherDiscordRPC(data) {
+    // Verificar que existe configuración Discord global
+    if (!data.rawDistribution.discord) {
+        console.log('[DISCORD] No config in distribution, skipping RPC init')
+        return
+    }
+    
+    // Configuración para el estado "launcher idle"
+    const launcherDiscordSettings = {
+        shortId: 'Launcher',
+        largeImageKey: 'launcher-icon',
+        largeImageText: 'TECNILAND Nexus'
+    }
+    
+    try {
+        // Inicializar Discord RPC con estado "En el menú principal"
+        DiscordWrapper.initRPC(
+            data.rawDistribution.discord,
+            launcherDiscordSettings,
+            Lang.queryJS('discord.waiting') // "En el menú principal"
+        )
+        
+        window.hasDiscordRPC = true
+    } catch(err) {
+        console.error('[DISCORD] Failed to initialize RPC:', err)
+        window.hasDiscordRPC = false
+    }
+}
+
 async function showMainUI(data){
 
     if(!isDev){
@@ -142,6 +183,10 @@ async function showMainUI(data){
     await restoreSelectedServerOrInstallation(data)
     
     refreshServerStatus()
+    
+    // Inicializar Discord Rich Presence para estado "launcher idle"
+    initLauncherDiscordRPC(data)
+    
     setTimeout(() => {
         document.getElementById('frameBar').style.backgroundColor = 'rgba(0, 0, 0, 0.5)'
         document.body.style.backgroundImage = `url('assets/images/backgrounds/${document.body.getAttribute('bkid')}.jpg')`

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <!-- NeoForge - Modern/Neo Hammer Icon -->
+  <defs>
+    <linearGradient id="neoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF8C42"/>
+      <stop offset="50%" style="stop-color:#E8721C"/>
+      <stop offset="100%" style="stop-color:#D4620F"/>
+    </linearGradient>
+    <linearGradient id="neoGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00D4FF"/>
+      <stop offset="100%" style="stop-color:#0099CC"/>
+    </linearGradient>
+  </defs>
+  <!-- Hammer Head with Neo Glow -->
+  <rect x="2" y="5" width="20" height="5" rx="1" fill="url(#neoGrad)"/>
+  <!-- Neo Accent Line -->
+  <rect x="2" y="5" width="20" height="1.5" rx="0.5" fill="url(#neoGlow)"/>
+  <!-- Handle -->
+  <rect x="10" y="10" width="4" height="12" rx="1" fill="#5D4037"/>
+  <rect x="11" y="11" width="2" height="3" fill="#8D6E63"/>
+  <!-- Neo Energy Accents -->
+  <circle cx="5" cy="7.5" r="1" fill="#00E5FF"/>
+  <circle cx="19" cy="7.5" r="1" fill="#00E5FF"/>
+  <path d="M8 3 L10 5" stroke="#00E5FF" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M16 3 L14 5" stroke="#00E5FF" stroke-width="1.5" stroke-linecap="round"/>
+</svg>

@@ -147,7 +147,7 @@ continueButton = "CONTINUE"
 
 
 [js.discord]
-waiting = "Waiting for Client.."
+waiting = "In main menu"
 state = "Server: {shortId}"
 
 [js.index]
@@ -268,9 +268,9 @@ maintenanceContent = """<div style="font-family: 'Segoe UI', Arial, sans-serif; 
 </div>"""
 
 [js.landing.discord]
-loading = "Loading game.."
-joining = "Sailing to Westeros!"
-joined = "Exploring the Realm!"
+loading = "Preparing the game..."
+joining = "Connecting to server..."
+joined = "Exploring the world 🌍"
 
 [js.overlay]
 dismiss = "Dismiss"

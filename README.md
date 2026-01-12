@@ -237,17 +237,34 @@ Cada una tiene su carpeta independiente en instances/.
 
 ---
 
-#### 6. Modpacks TECNILAND (Completado - Base)
-Sección dedicada con modpacks preconfigurados.
+#### 6. Modpacks TECNILAND (✅ Completado - Fase 1)
+Sistema completo de gestión de modpacks preconfigurados.
 
-**Características:**
-- Sección "TECNILAND" en el menú principal.
-- Instalación con un clic (descarga + extrae + listo).
-- Separación clara en UI entre TECNILAND y instalaciones custom.
-- Información del modpack (nombre, versión, tamaño, descripción).
-- Botón "Jugar" directo para iniciar modpack instalado.
+**Características implementadas:**
+- ✅ **Sección dedicada:** Tab "SERVIDORES TECNILAND" en selector de instalaciones.
+- ✅ **Detección automática:** Escanea carpeta `.tecnilandnexus/instances/` y auto-registra instalaciones existentes.
+- ✅ **Sistema de badges visuales:**
+  - Badge verde "✓ Instalado" para modpacks instalados
+  - Badge dorado pulsante "⬆ ACTUALIZACIÓN DISPONIBLE" cuando hay nueva versión
+- ✅ **Menú contextual (click derecho):**
+  - "📂 Abrir carpeta" - Acceso directo a la carpeta de instalación
+  - "🗑️ Desinstalar para liberar espacio" - Con confirmación y muestra espacio a liberar
+- ✅ **Preservación de datos:** Al desinstalar, guarda partidas en carpeta de respaldo.
+- ✅ **Cálculo de tamaño:** Muestra tamaño real de instalación en disco.
+- ✅ **Separación de sistemas:** Completamente independiente de instalaciones personalizadas.
+- ✅ **Arquitectura correcta:** Respeta sistema Helios FullRepair (validación/descarga automática al presionar "Jugar").
+- ✅ **Update automático:** No requiere botones manuales, Helios detecta cambios en distribution.json.
 
-**Nota:** La distribución actual se basa en Nebula + Cloudflare R2 (ver sección dedicada).
+**Flujo de uso:**
+```
+1. Usuario ve lista de modpacks TECNILAND con badges de estado
+2. Selecciona modpack → Click "Seleccionar" → "Jugar"
+3. Si no está instalado: Helios descarga automáticamente
+4. Si hay actualización: Helios valida y descarga cambios
+5. Click derecho para acceder a carpeta o desinstalar
+```
+
+**Nota técnica:** El sistema detecta actualizaciones comparando `version` en `distribution.json` (remoto) vs `config.json` (local). Al presionar "Jugar", Helios FullRepair verifica archivos por MD5 y descarga solo lo necesario.
 
 ---
 
@@ -266,6 +283,107 @@ Diseño y navegación del launcher.
 - Sidebar con navegación: Inicio, Instalaciones, Modpacks, Ajustes.
 - Panel principal: listado de instalaciones/modpacks.
 - Panel secundario: logs (si está activado).
+
+---
+
+#### 8. Discord Rich Presence (Completado)
+Integración completa con Discord para mostrar tu actividad en tiempo real.
+
+**Características:**
+- **Estado dinámico en Discord:** Muestra automáticamente lo que estás haciendo en TECNILAND Nexus.
+- **Modo Idle:** Cuando el launcher está abierto sin jugar, muestra "Navegando en TECNILAND Nexus" con el logo del launcher.
+- **Modo Playing:** Cuando juegas Minecraft, muestra:
+  - Nombre del servidor/modpack en el que estás jugando
+  - Versión de Minecraft y loader (ej: "Minecraft 1.20.1 Forge")
+  - Tiempo de juego en sesión actual
+  - Logo del servidor/modpack (si está configurado en distribution.json)
+- **Botones interactivos:**
+  - "Únete al Discord" - Link directo al servidor de Discord TECNILAND
+  - "Visita el servidor" - Link al sitio web del servidor/modpack (si está disponible)
+- **Actualizaciones automáticas:** El estado se actualiza en tiempo real sin intervención del usuario.
+- **Toggle en configuración:** Puedes activar/desactivar Rich Presence desde Ajustes → Launcher → "Habilitar Discord Rich Presence".
+
+**Ejemplo de flujo:**
+```
+Usuario abre el launcher:
+→ Discord muestra: "Navegando en TECNILAND Nexus"
+
+Usuario selecciona "Servidor TECNILAND SkyFactory":
+→ Click en "Jugar"
+→ Discord cambia a: "Jugando SkyFactory 4"
+   Details: "Minecraft 1.12.2 Forge"
+   Elapsed: "Jugando desde hace 45 minutos"
+   Botones: [Únete al Discord] [Visita el servidor]
+
+Usuario cierra Minecraft pero deja el launcher abierto:
+→ Discord vuelve a: "Navegando en TECNILAND Nexus"
+```
+
+**Beneficio:** Tus amigos pueden ver qué estás jugando y unirse fácilmente al mismo servidor/modpack.
+
+**Documentación técnica:** Ver [DISCORD_RPC_SETUP.md](docs/DISCORD_RPC_SETUP.md) para detalles de implementación y [DISCORD_RPC_LAUNCHER_IDLE.md](docs/DISCORD_RPC_LAUNCHER_IDLE.md) para el modo idle.
+
+---
+
+#### 9. Refactorización completa de UI - Selector de instancias (Completado)
+Rediseño profesional de la interfaz de selección de instancias con estética moderna neo-sci-fi.
+
+**Características implementadas:**
+
+**Sistema de iconos SVG:**
+- ✅ Reemplazo completo de emojis por iconos SVG vectoriales profesionales
+- ✅ 10 iconos personalizados: Vanilla, Forge, Fabric, Quilt, NeoForge, OptiFine, Server, Gamepad, Add, Unknown
+- ✅ Iconos escalables y optimizados para diferentes resoluciones
+- ✅ Consistencia visual en toda la interfaz
+
+**Arquitectura CSS BEM (Block Element Modifier):**
+- ✅ Organización modular de estilos CSS con metodología BEM
+- ✅ Componentes reutilizables: `.instance-card`, `.instance-selector__tab`, `.tecniland-hero`, etc.
+- ✅ Mantenibilidad mejorada y código CSS estructurado
+- ✅ Variables CSS para tokens de diseño (colores, espaciado, tipografía)
+
+**Hero Header para sección TECNILAND:**
+- ✅ Header destacado con logo y branding TECNILAND
+- ✅ Diseño horizontal compacto optimizado para ventana 980x552px
+- ✅ Estadísticas en tiempo real: contador de modpacks y modpacks instalados
+- ✅ Animaciones suaves con gradientes y efectos de glow
+- ✅ Ancho fijo de 450px para simetría perfecta
+
+**Tabs de navegación rediseñadas:**
+- ✅ Tabs con iconos SVG para "Instalaciones Personalizadas" y "Servidores TECNILAND"
+- ✅ Estados visuales claros: hover, activo, inactivo
+- ✅ Indicador de tab activo con animación de borde inferior
+- ✅ Ancho fijo de 450px, centrado perfectamente
+
+**Sistema de cards con animaciones:**
+- ✅ Cards con micro-animaciones: entrada escalonada (staggered animation)
+- ✅ Hover states con elevación y cambios de color
+- ✅ Selected state con glow pulsante animado
+- ✅ Efectos de gradiente en hover para profundidad visual
+- ✅ Ancho uniforme de 450px para todas las cards
+
+**Micro-animaciones y transiciones:**
+- ✅ Animación `cardSlideIn` con delay escalonado para cada elemento
+- ✅ Animación `selectedPulse` para el estado seleccionado
+- ✅ Animación `heroFadeIn` para la entrada del Hero Header
+- ✅ Transiciones suaves con cubic-bezier para sensación fluida
+- ✅ Estados hover con `transform: translateY(-2px)` y box-shadow
+
+**Centrado y simetría perfecta:**
+- ✅ Todos los elementos con ancho fijo de 450px
+- ✅ Centrado vertical con `justify-content: center`
+- ✅ Centrado horizontal con `align-items: center` y `margin: 0 auto`
+- ✅ Optimizado para ventana por defecto (980x552) y maximizada
+- ✅ Layout responsivo que mantiene proporciones
+
+**Consistencia visual en editor de instalaciones:**
+- ✅ Botones de loader con iconos SVG coherentes
+- ✅ Estilos unificados entre selector y editor
+- ✅ Paleta de colores consistente con tokens CSS
+
+**Beneficio:** Interfaz moderna y profesional que mejora significativamente la experiencia de usuario con animaciones fluidas, navegación intuitiva y estética coherente con el branding TECNILAND.
+
+**Impacto visual:** Reducción de ruido visual, mejor jerarquía de información, y experiencia premium comparable con launchers comerciales.
 
 ---
 
@@ -439,13 +557,18 @@ Estas son las mejoras que convierten el sistema en "producto profesional":
 | **Modpacks** | Sección TECNILAND | ✅ Hecho | Menú + UI | - |
 | **Modpacks** | Generación (Nebula) | ✅ Hecho | `g distro` funciona | - |
 | **Modpacks** | Upload a R2 | ✅ Hecho | rclone sync ok | - |
-| **Modpacks** | Desinstalar | ⬜ Pendiente | Agregar botón | **Alta** |
-| **Modpacks** | Mostrar tamaño | ⬜ Pendiente | Parseár distro | **Alta** |
-| **Modpacks** | Repair/Update UI | ⬜ Pendiente | Nueva UI + lógica | **Muy alta** |
-| **Modpacks** | No pisar configs | ⬜ Pendiente | Policy + validación | **Muy alta** |
-| **UI/UX** | Estética TECNILAND | 🟡 Parcial | Tema base existe | Media |
+| **Modpacks** | Detección física | ✅ Hecho | Auto-registro instalaciones | - |
+| **Modpacks** | Sistema de badges | ✅ Hecho | Verde (instalado) + Dorado (actualización) | - |
+| **Modpacks** | Menú contextual | ✅ Hecho | Click derecho: Abrir carpeta / Desinstalar | - |
+| **Modpacks** | Desinstalar | ✅ Hecho | Con confirmación + preservar saves | - |
+| **Modpacks** | Mostrar tamaño | ✅ Hecho | Calculado desde distribution.json | - |
+| **Modpacks** | Abrir carpeta | ✅ Hecho | Acceso directo a instancia | - |
+| **Modpacks** | Separación sistemas | ✅ Hecho | Instalaciones personalizadas vs TECNILAND | - |
+| **Modpacks** | Repair/Update (Manual) | ⬜ **Eliminado** | **Helios FullRepair maneja automáticamente** | N/A |
+| **Modpacks** | No pisar configs | ✅ Hecho | Helios valida al presionar "Jugar" | - |
+| **UI/UX** | Estética TECNILAND | ✅ Hecho | Refactorización completa: SVG icons, BEM CSS, Hero Header, animaciones | - |
 | **Release** | Auto-update launcher | ⬜ Pendiente | Update checker | Baja |
-| **Comunidad** | Discord Rich Presence | ⬜ Pendiente | Integración Discord | Baja |
+| **Comunidad** | Discord Rich Presence | ✅ Hecho | Modo Idle + Playing con botones | - |
 | **Backend** | Servidor TECNILAND | ⬜ Pendiente | Backend + sync | Muy baja |
 
 ---
@@ -488,59 +611,54 @@ Objetivo: Consolidar soporte para Fabric y Quilt.
 
 ---
 
-### 🧰 Fase 2.5 (Nueva): Repair / Update UI (Mantenimiento)
+### 🎯 Fase 3: Modpacks TECNILAND - Funcionalidades Avanzadas
 
-Objetivo: que el usuario pueda mantener su instalación sana sin reinstalar todo.
+> ✅ **Sistema base completado:** Detección, badges, menú contextual, desinstalación, y gestión automática de actualizaciones.
 
-**Tareas críticas:**
-- [ ] Botón "Repair" visible en:
-  - [ ] Instalaciones custom
-  - [ ] Modpacks TECNILAND
-
-- [ ] Repair rápido (mods/loader) sin pisar configs del usuario
-  - [ ] Validar hashes de mods/loader
-  - [ ] Re-descargar solo lo dañado
-  - [ ] Mantener `options.txt`, `config/`, `defaultconfigs/`
-
-- [ ] Full Repair (restaurar estado oficial completo)
-  - [ ] Opción de "restaurar todo"
-  - [ ] Confirmación (con advertencia de datos perdidos)
-
-- [ ] Progreso claro + logs en vivo
-  - [ ] Barra de progreso
-  - [ ] Logs en tiempo real (sin congelar UI)
-
-- [ ] Resultado final: "Listo para jugar" o "Error con reporte"
-  - [ ] Mensaje claro al usuario
-  - [ ] Opción de exportar logs si hay error
-
-**Estimación:** 2-3 sesiones de trabajo con Copilot.
-
----
-
-### 🎯 Fase 3: Modpacks TECNILAND v1.0 (Producto real)
-
-Objetivo: cerrar las "derivaciones" del sistema Modpacks (ver sección anterior).
+Objetivo: Expandir el sistema de modpacks con características premium y experiencia mejorada.
 
 **Tareas por prioridad:**
 
-**Muy alta (hacer primero):**
-- [ ] Desinstalar modpack (UI + lógica)
-- [ ] Mostrar tamaño/peso del modpack
-- [ ] Repair/Update botón (continuación de Fase 2.5)
-- [ ] No pisar `options.txt` en updates (política)
-
 **Alta:**
-- [ ] Canales Stable/Beta para releases del modpack
-- [ ] Updates confiables sin re-descargas completas
-- [ ] Pulido UI TECNILAND (cards, estado, animaciones)
+- [ ] **Vista previa de modpack (card expandida)**
+  - Screenshot/imagen de preview
+  - Descripción extendida con markdown
+  - Lista de mods principales incluidos
+  - Requisitos mínimos de sistema
+
+- [ ] **Canales Stable/Beta para modpacks**
+  - Selector de canal en configuración
+  - Beta channel: versiones experimentales con advertencia
+  - Stable channel: solo versiones probadas
+
+- [ ] **Información del creador**
+  - Nombre del autor/equipo
+  - Links: Discord, Twitter, web oficial
+  - Notas de versión (changelog)
 
 **Media:**
-- [ ] Vista previa de modpack (screenshot/preview)
-- [ ] Información del creador
-- [ ] Historial de versiones
+- [ ] **Historial de versiones**
+  - Ver changelog completo
+  - Revertir a versión anterior (rollback)
+  - Comparación entre versiones
 
-**Estimación:** 4-5 sesiones.
+- [ ] **Estadísticas de modpack**
+  - Número de descargas
+  - Rating comunitario
+  - Última actualización
+
+- [ ] **Importar Modpacks ZIP externos**
+  - Drag & drop o selector de archivos
+  - Validación de estructura
+  - Conversión a formato TECNILAND
+
+**Baja:**
+- [ ] **Sistema de favoritos**
+  - Marcar modpacks como favoritos
+  - Filtro rápido
+  - Notificaciones de actualizaciones solo para favoritos
+
+**Estimación:** 3-4 sesiones.
 
 ---
 
@@ -550,10 +668,13 @@ Objetivo: integraciones externas + features sociales.
 
 **Tareas:**
 
-- [ ] **Discord Rich Presence**
-  - Mostrar en Discord: "Jugando en [Modpack] - MC [Versión]"
-  - Tiempo de juego
-  - Botones "Unirse" si aplica
+- [x] **Discord Rich Presence** ✅ Completado
+  - ✅ Modo Idle: "Navegando en TECNILAND Nexus"
+  - ✅ Modo Playing: "Jugando en [Modpack] - MC [Versión]"
+  - ✅ Tiempo de juego en sesión actual
+  - ✅ Botones interactivos: "Únete al Discord" y "Visita el servidor"
+  - ✅ Toggle en configuración para activar/desactivar
+  - ✅ Actualización automática en tiempo real
 
 - [ ] **Sistema de Skins mejorado**
   - Subir skins con cuenta offline (UI)

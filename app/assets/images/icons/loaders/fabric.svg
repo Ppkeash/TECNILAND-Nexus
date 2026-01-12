@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <!-- Fabric - Thread/Weave Style Icon -->
+  <defs>
+    <linearGradient id="fabricGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#DBB98F"/>
+      <stop offset="50%" style="stop-color:#C8A97A"/>
+      <stop offset="100%" style="stop-color:#B8956A"/>
+    </linearGradient>
+  </defs>
+  <!-- Woven Pattern -->
+  <path d="M4 4 L20 20" stroke="url(#fabricGrad)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M12 2 L12 22" stroke="url(#fabricGrad)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M20 4 L4 20" stroke="url(#fabricGrad)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M2 12 L22 12" stroke="url(#fabricGrad)" stroke-width="3" stroke-linecap="round"/>
+  <!-- Center Knot -->
+  <circle cx="12" cy="12" r="3" fill="#9E8B78" stroke="#C8A97A" stroke-width="1"/>
+</svg>

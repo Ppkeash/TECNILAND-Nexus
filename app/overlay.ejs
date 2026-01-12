@@ -2,14 +2,38 @@
     <div id="serverSelectContent" style="display: none;">
         <span id="serverSelectHeader"><%- lang('overlay.serverSelectHeader') %></span>
         
-        <!-- Tabs para alternar entre Instalaciones y Servidores -->
-        <div id="serverSelectTabs" style="display: flex; gap: 10px; margin-bottom: 15px; justify-content: center;">
-            <button id="tabInstallations" class="serverSelectTab active" style="flex: 1; padding: 10px 20px; background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.4); border-radius: 8px; color: white; cursor: pointer; font-weight: 600; transition: all 0.3s;">
-                <span>🎮 INSTALACIONES PERSONALIZADAS</span>
+        <!-- Tabs: Instalaciones Personalizadas | Servidores TECNILAND -->
+        <div id="serverSelectTabs" class="instance-selector__tabs">
+            <button id="tabInstallations" class="serverSelectTab instance-selector__tab instance-selector__tab--active" type="button">
+                <img src="assets/images/icons/loaders/gamepad.svg" class="instance-selector__tab-icon" alt="">
+                <span>INSTALACIONES PERSONALIZADAS</span>
             </button>
-            <button id="tabServers" class="serverSelectTab" style="flex: 1; padding: 10px 20px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; color: rgba(255,255,255,0.7); cursor: pointer; font-weight: 600; transition: all 0.3s;">
-                <span>🌐 MODPACKS TECNILAND [NO IMPLEMENTADO] </span>
+            <button id="tabServers" class="serverSelectTab instance-selector__tab instance-selector__tab--tecniland" type="button">
+                <img src="assets/images/icons/loaders/server.svg" class="instance-selector__tab-icon" alt="">
+                <span>TECNILAND</span>
             </button>
+        </div>
+
+        <!-- Hero Header para sección TECNILAND (oculto por defecto) -->
+        <div id="tecnilandHeroHeader" class="tecniland-hero" style="display: none;">
+            <div class="tecniland-hero__glow"></div>
+            <div class="tecniland-hero__content">
+                <img src="assets/images/icons/loaders/server.svg" class="tecniland-hero__logo" alt="TECNILAND">
+                <div class="tecniland-hero__text">
+                    <h2 class="tecniland-hero__title">SERVIDORES TECNILAND</h2>
+                    <p class="tecniland-hero__subtitle">Modpacks oficiales optimizados y listos para jugar</p>
+                </div>
+            </div>
+            <div class="tecniland-hero__stats">
+                <div class="tecniland-hero__stat">
+                    <span class="tecniland-hero__stat-value" id="heroModpackCount">0</span>
+                    <span class="tecniland-hero__stat-label">Modpacks</span>
+                </div>
+                <div class="tecniland-hero__stat">
+                    <span class="tecniland-hero__stat-value" id="heroInstalledCount">0</span>
+                    <span class="tecniland-hero__stat-label">Instalados</span>
+                </div>
+            </div>
         </div>
 
         <div id="serverSelectList">
@@ -17,16 +41,17 @@
             <div id="installationSelectListScrollable" class="scrollbar-hidden" style="display: block;">
                 <!-- Installation listings populated here. -->
             </div>
-            <!-- Lista de servidores TECNILAND -->
-            <div id="serverSelectListScrollable" class="scrollbar-hidden" style="display: none;">
-                <!-- Server listings populated here. -->
+            <!-- Lista de Servidores/Modpacks TECNILAND -->
+            <div id="serverSelectListScrollable" class="scrollbar-hidden tecniland-modpacks" style="display: none;">
+                <!-- Populated dynamically by populateServerListings() -->
             </div>
         </div>
 
         <!-- Botón para crear nueva instalación -->
-        <div id="installationCreateButton" style="text-align: center; margin: 15px 0;">
-            <button id="createNewInstallation" style="padding: 12px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; font-size: 14px; text-transform: uppercase; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); transition: all 0.3s;">
-                ➕ Nueva Instalación
+        <div id="installationCreateButton" class="instance-selector__create-wrapper">
+            <button id="createNewInstallation" class="instance-selector__create-btn">
+                <img src="assets/images/icons/loaders/add.svg" class="instance-selector__create-icon" alt="">
+                Nueva Instalación
             </button>
         </div>
 
@@ -39,11 +64,15 @@
     </div>
 
     <!-- Installation Editor Panel (inline) -->
-    <div id="installationEditorContent" class="scrollbar-hidden" style="display: none;">
-        <span id="installationEditorHeader" style="display: block; text-align: center; font-size: 24px; font-weight: 600; margin-bottom: 10px;">✨ Nueva Instalación</span>
-        <p style="text-align: center; opacity: 0.8; margin-bottom: 25px; font-size: 14px;">Crea una instalación personalizada con tu mod loader favorito</p>
+    <div id="installationEditorContent" class="scrollbar-hidden instance-editor" style="display: none;">
+        <span id="installationEditorHeader" class="instance-editor__header">
+            <img src="assets/images/icons/loaders/add.svg" class="instance-editor__header-icon" alt="">
+            Nueva Instalación
+        </span>
+        <p class="instance-editor__subtitle">Crea una instalación personalizada con tu mod loader favorito</p>
 
         <div id="installationEditorErrorMessage" style="display: none; background: rgba(244, 67, 54, 0.9); color: white; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 14px;"></div>
+
 
         <form id="installationEditorForm">
             <!-- Nombre -->
@@ -55,12 +84,27 @@
             <!-- Mod Loader -->
             <div class="installationEditorFormGroup">
                 <label>Mod Loader</label>
-                <div id="installationEditorLoaderSelector" style="display: flex; gap: 8px; flex-wrap: wrap;">
-                    <button type="button" class="installationEditorLoaderBtn active" data-loader="vanilla">🟩 Vanilla</button>
-                    <button type="button" class="installationEditorLoaderBtn" data-loader="forge">🔨 Forge</button>
-                    <button type="button" class="installationEditorLoaderBtn" data-loader="fabric">🧵 Fabric</button>
-                    <button type="button" class="installationEditorLoaderBtn" data-loader="quilt">🪡 Quilt</button>
-                    <button type="button" class="installationEditorLoaderBtn" data-loader="neoforge">⚒️ NeoForge</button>
+                <div id="installationEditorLoaderSelector" class="instance-editor__loader-grid">
+                    <button type="button" class="installationEditorLoaderBtn instance-editor__loader-btn active" data-loader="vanilla">
+                        <img src="assets/images/icons/loaders/vanilla.svg" class="instance-editor__loader-icon" alt="">
+                        <span>Vanilla</span>
+                    </button>
+                    <button type="button" class="installationEditorLoaderBtn instance-editor__loader-btn" data-loader="forge">
+                        <img src="assets/images/icons/loaders/forge.svg" class="instance-editor__loader-icon" alt="">
+                        <span>Forge</span>
+                    </button>
+                    <button type="button" class="installationEditorLoaderBtn instance-editor__loader-btn" data-loader="fabric">
+                        <img src="assets/images/icons/loaders/fabric.svg" class="instance-editor__loader-icon" alt="">
+                        <span>Fabric</span>
+                    </button>
+                    <button type="button" class="installationEditorLoaderBtn instance-editor__loader-btn" data-loader="quilt">
+                        <img src="assets/images/icons/loaders/quilt.svg" class="instance-editor__loader-icon" alt="">
+                        <span>Quilt</span>
+                    </button>
+                    <button type="button" class="installationEditorLoaderBtn instance-editor__loader-btn" data-loader="neoforge">
+                        <img src="assets/images/icons/loaders/neoforge.svg" class="instance-editor__loader-icon" alt="">
+                        <span>NeoForge</span>
+                    </button>
                 </div>
             </div>
 
@@ -82,12 +126,12 @@
             </div>
 
             <!-- Botones de acción -->
-            <div id="installationEditorActions" style="display: flex; gap: 12px; margin-top: 25px;">
-                <button type="button" id="installationEditorCancel" style="flex: 1; padding: 14px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3); border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
-                    ❌ Cancelar
+            <div id="installationEditorActions" class="instance-editor__actions">
+                <button type="button" id="installationEditorCancel" class="instance-editor__btn instance-editor__btn--cancel">
+                    Cancelar
                 </button>
-                <button type="submit" id="installationEditorCreate" disabled style="flex: 1; padding: 14px; background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
-                    ✅ Crear Instalación
+                <button type="submit" id="installationEditorCreate" class="instance-editor__btn instance-editor__btn--submit" disabled>
+                    Crear Instalación
                 </button>
             </div>
         </form>

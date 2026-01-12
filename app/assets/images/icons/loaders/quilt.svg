@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <!-- Quilt - Patchwork Pattern Icon -->
+  <defs>
+    <linearGradient id="quiltGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#9C5A9C"/>
+      <stop offset="100%" style="stop-color:#7B4B7B"/>
+    </linearGradient>
+    <linearGradient id="quiltGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#C490C4"/>
+      <stop offset="100%" style="stop-color:#A876A8"/>
+    </linearGradient>
+  </defs>
+  <!-- Quilt Patches -->
+  <rect x="2" y="2" width="9" height="9" rx="1" fill="url(#quiltGrad1)"/>
+  <rect x="13" y="2" width="9" height="9" rx="1" fill="url(#quiltGrad2)"/>
+  <rect x="2" y="13" width="9" height="9" rx="1" fill="url(#quiltGrad2)"/>
+  <rect x="13" y="13" width="9" height="9" rx="1" fill="url(#quiltGrad1)"/>
+  <!-- Stitching -->
+  <path d="M12 2 L12 22" stroke="#E0B0E0" stroke-width="1" stroke-dasharray="2,2"/>
+  <path d="M2 12 L22 12" stroke="#E0B0E0" stroke-width="1" stroke-dasharray="2,2"/>
+  <!-- Corner Details -->
+  <circle cx="6.5" cy="6.5" r="1.5" fill="#D4A5D4" opacity="0.7"/>
+  <circle cx="17.5" cy="17.5" r="1.5" fill="#D4A5D4" opacity="0.7"/>
+</svg>

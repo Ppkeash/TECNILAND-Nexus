@@ -108,7 +108,8 @@ const DEFAULT_CONFIG = {
     modConfigurations: [],
     javaConfig: {},
     installations: [],
-    selectedInstallation: null
+    selectedInstallation: null,
+    modpackInstallations: []  // TECNILAND Modpacks state
 }
 
 let config = null
@@ -1101,6 +1102,16 @@ exports.updateInstallation = function(id, updates){
     if (updates.serverAddress !== undefined) {
         existing.serverAddress = updates.serverAddress
     }
+    // Upgrade tracking fields
+    if (updates.upgradeHistory !== undefined) {
+        existing.upgradeHistory = updates.upgradeHistory
+    }
+    if (updates.lastUpgrade !== undefined) {
+        existing.lastUpgrade = updates.lastUpgrade
+    }
+    if (updates.upgradeFailed !== undefined) {
+        existing.upgradeFailed = updates.upgradeFailed
+    }
     
     config.installations[index] = existing
     logger.info(`Installation updated: ${id}`)
@@ -1182,4 +1193,170 @@ exports.getSelectedInstallation = function(){
  */
 exports.setSelectedInstallation = function(installationId){
     config.selectedInstallation = installationId
+}
+
+// ============================================================================
+// TECNILAND Modpack Installations Management
+// ============================================================================
+
+/**
+ * Modpack installation schema:
+ * {
+ *   id: string,              // Server ID from distribution.json (e.g. "tecniland-og-1.20.1")
+ *   version: string,         // Installed version from distribution
+ *   minecraftVersion: string,// MC version (e.g. "1.20.1")
+ *   installedAt: number,     // Timestamp of installation
+ *   lastPlayed: number|null, // Timestamp of last play
+ *   sizeOnDisk: number,      // Size in bytes
+ *   installPath: string,     // Path to instance folder
+ *   status: string           // 'installed'|'updating'|'repairing'|'corrupted'
+ * }
+ */
+
+/**
+ * Get all TECNILAND modpack installations.
+ * 
+ * @returns {Array} Array of modpack installation objects.
+ */
+exports.getModpackInstallations = function(){
+    if (!config.modpackInstallations) {
+        config.modpackInstallations = []
+    }
+    return config.modpackInstallations
+}
+
+/**
+ * Get a specific modpack installation by server ID.
+ * 
+ * @param {string} serverId The server ID from distribution.json.
+ * @returns {Object|null} The modpack installation object or null if not found.
+ */
+exports.getModpackInstallation = function(serverId){
+    if (!config.modpackInstallations) {
+        config.modpackInstallations = []
+    }
+    return config.modpackInstallations.find(mp => mp.id === serverId) || null
+}
+
+/**
+ * Save or update a modpack installation state.
+ * 
+ * @param {Object} modpackData The modpack installation data.
+ * @returns {boolean} True if successful.
+ */
+exports.saveModpackInstallation = function(modpackData){
+    if (!config.modpackInstallations) {
+        config.modpackInstallations = []
+    }
+    
+    const existingIndex = config.modpackInstallations.findIndex(mp => mp.id === modpackData.id)
+    
+    if (existingIndex !== -1) {
+        // Update existing
+        config.modpackInstallations[existingIndex] = {
+            ...config.modpackInstallations[existingIndex],
+            ...modpackData
+        }
+        logger.info(`Modpack installation updated: ${modpackData.id}`)
+    } else {
+        // Add new
+        config.modpackInstallations.push({
+            id: modpackData.id,
+            version: modpackData.version || '1.0.0',
+            minecraftVersion: modpackData.minecraftVersion || 'unknown',
+            installedAt: modpackData.installedAt || Date.now(),
+            lastPlayed: modpackData.lastPlayed || null,
+            sizeOnDisk: modpackData.sizeOnDisk || 0,
+            installPath: modpackData.installPath || '',
+            status: modpackData.status || 'installed'
+        })
+        logger.info(`Modpack installation added: ${modpackData.id}`)
+    }
+    
+    return true
+}
+
+/**
+ * Update the last played timestamp for a modpack.
+ * 
+ * @param {string} serverId The server ID.
+ * @returns {boolean} True if successful.
+ */
+exports.updateModpackLastPlayed = function(serverId){
+    const modpack = exports.getModpackInstallation(serverId)
+    if (modpack) {
+        modpack.lastPlayed = Date.now()
+        return true
+    }
+    return false
+}
+
+/**
+ * Update the status of a modpack installation.
+ * 
+ * @param {string} serverId The server ID.
+ * @param {string} status The new status ('installed'|'updating'|'repairing'|'corrupted').
+ * @returns {boolean} True if successful.
+ */
+exports.updateModpackStatus = function(serverId, status){
+    const modpack = exports.getModpackInstallation(serverId)
+    if (modpack) {
+        modpack.status = status
+        logger.info(`Modpack ${serverId} status changed to: ${status}`)
+        return true
+    }
+    return false
+}
+
+/**
+ * Remove a modpack installation from config.
+ * Does NOT delete files - that's ModpackManager's job.
+ * 
+ * @param {string} serverId The server ID to remove.
+ * @returns {boolean} True if removed, false if not found.
+ */
+exports.removeModpackInstallation = function(serverId){
+    if (!config.modpackInstallations) {
+        config.modpackInstallations = []
+        return false
+    }
+    
+    const index = config.modpackInstallations.findIndex(mp => mp.id === serverId)
+    if (index === -1) {
+        logger.warn(`Modpack installation not found: ${serverId}`)
+        return false
+    }
+    
+    const removed = config.modpackInstallations.splice(index, 1)[0]
+    logger.info(`Modpack installation removed: ${removed.id}`)
+    return true
+}
+
+/**
+ * Check if a modpack is installed.
+ * 
+ * @param {string} serverId The server ID.
+ * @returns {boolean} True if installed.
+ */
+exports.isModpackInstalled = function(serverId){
+    const modpack = exports.getModpackInstallation(serverId)
+    return modpack !== null && modpack.status === 'installed'
+}
+
+/**
+ * Get the preserved files list for modpack updates.
+ * These files will be backed up before update and restored after.
+ * 
+ * @returns {Array<string>} Array of glob patterns for files to preserve.
+ */
+exports.getModpackPreservedFiles = function(){
+    return [
+        'options.txt',
+        'config/**',
+        'defaultconfigs/**',
+        'saves/**',
+        'screenshots/**',
+        'resourcepacks/**',
+        'shaderpacks/**'
+    ]
 }

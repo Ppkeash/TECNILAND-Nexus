@@ -5,11 +5,11 @@
 title = "TECNILAND Nexus"
 
 [ejs.landing]
-mediaGitHubURL = "#"
+mediaGitHubURL = "https://github.com/Ppkeash"
 mediaXURL = "#"
-mediaInstagramURL = "#"
-mediaYouTubeURL = "#"
-mediaDiscordURL = "#"
+mediaInstagramURL = "https://www.instagram.com/ppzek_sh/"
+mediaYouTubeURL = "https://www.youtube.com/@lil_kysh"
+mediaDiscordURL = "https://discord.gg/53T4Tzrea3"
 
 [ejs.settings]
 # Original: https://github.com/dscalzi/HeliosLauncher
@@ -17,6 +17,6 @@ sourceGithubLink = "#"
 supportLink = "#"
 
 [ejs.welcome]
-welcomeHeader = "WELCOME TO WESTEROSCRAFT"
-welcomeDescription = "Our mission is to recreate the universe imagined by author George RR Martin in his fantasy series, A Song of Ice and Fire.  Through the collaborative effort of thousands of community members, we have sought to create Westeros as accurately and precisely as possible within Minecraft.  The world we are creating is yours to explore.  Journey from Dorne to Castle Black, and if you aren’t afraid, beyond the Wall itself, but best not delay.  As the words of House Stark ominously warn: Winter is Coming."
-welcomeDescCTA = "You are just a few clicks away from Westeros."
+welcomeHeader = "BIENVENIDO A TECNILAND NEXUS"
+welcomeDescription = "Este launcher fue creado para ofrecer una experiencia clara, estable y hecha a medida. A diferencia de otros launchers genéricos, TECNILAND integra todo en un solo lugar: acceso simplificado, configuración optimizada, actualizaciones controladas y una interfaz pensada para que solo tengas que jugar. Aquí no descargas mods al azar ni ajustas cosas técnicas; el launcher se encarga de mantener todo sincronizado para que entres al juego sin complicaciones. Es la forma más directa y confiable de vivir la experiencia TECNILAND."
+welcomeDescCTA = "Diseñado para la forma en que TECNILAND se vive."

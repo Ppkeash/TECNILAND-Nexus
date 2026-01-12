@@ -91,21 +91,84 @@ We've thoroughly tested all Forge versions from Minecraft 1.13 to 1.21.x. Here a
   - Dark green/black theme aligned with TECNILAND branding.
   - Toggle in Settings → Launcher to enable/disable.
 
-- **Custom Installation Manager** (In Development)
+- **Custom Installation Manager** (Completed Phase 1)
   - Create, edit, delete custom installations.
   - Select Minecraft version + Loader (Forge).
   - Automatic folder synchronization `instances/`.
 
-- **TECNILAND Modpacks** (In Development)
-  - Dedicated section with pre-configured modpacks.
-  - One-click installation.
-  - Clear UI separation between TECNILAND and custom installations.
+- **TECNILAND Modpacks System** (✅ Completed Phase 1)
+  - ✅ **Dedicated section:** "TECNILAND SERVERS" tab in installation selector.
+  - ✅ **Automatic detection:** Scans `.tecnilandnexus/instances/` and auto-registers existing installations.
+  - ✅ **Visual badge system:**
+    - Green badge "✓ Installed" for installed modpacks
+    - Gold pulsating badge "⬆ Update Available" when new version exists
+  - ✅ **Context menu (right-click):**
+    - "📂 Open Folder" - Direct access to installation folder
+    - "🗑️ Uninstall to Free Space" - With confirmation showing space to be freed
+  - ✅ **Data preservation:** Saves game worlds to backup folder when uninstalling.
+  - ✅ **Size calculation:** Shows real installation size on disk.
+  - ✅ **System separation:** Completely independent from custom installations.
+  - ✅ **Correct architecture:** Respects Helios FullRepair system (automatic validation/download when pressing "Play").
+  - ✅ **Automatic updates:** No manual buttons needed, Helios detects changes in distribution.json.
 
 - **Professional UI Integration**
   - Responsive design in Electron.
   - Coherent green/black theme.
   - Intuitive navigation with tabs and menus.
   - Translations: Spanish (es_ES) and English (en_US).
+
+- **Discord Rich Presence** (✅ Completed)
+  - **Idle Mode:** Shows "Browsing TECNILAND Nexus" when launcher is open without playing.
+  - **Playing Mode:** When playing Minecraft, displays:
+    - Server/modpack name
+    - Minecraft version and loader (e.g., "Minecraft 1.20.1 Forge")
+    - Elapsed play time for current session
+    - Server/modpack logo (if configured in distribution.json)
+  - **Interactive buttons:**
+    - "Join Discord" - Direct link to TECNILAND Discord server
+    - "Visit Server" - Link to server/modpack website (if available)
+  - **Automatic updates:** Status updates in real-time without user intervention.
+  - **Configuration toggle:** Enable/disable Rich Presence from Settings → Launcher → "Enable Discord Rich Presence".
+  - See [DISCORD_RPC_SETUP.md](docs/DISCORD_RPC_SETUP.md) for implementation details.
+
+- **Complete UI Refactoring - Instance Selector** (✅ Completed)
+  - **SVG Icon System:**
+    - ✅ Complete replacement of emojis with professional SVG vector icons
+    - ✅ 10 custom icons: Vanilla, Forge, Fabric, Quilt, NeoForge, OptiFine, Server, Gamepad, Add, Unknown
+    - ✅ Scalable icons optimized for different resolutions
+  - **BEM CSS Architecture (Block Element Modifier):**
+    - ✅ Modular CSS organization with BEM methodology
+    - ✅ Reusable components: `.instance-card`, `.instance-selector__tab`, `.tecniland-hero`
+    - ✅ Improved maintainability and structured CSS code
+    - ✅ CSS variables for design tokens (colors, spacing, typography)
+  - **Hero Header for TECNILAND section:**
+    - ✅ Featured header with TECNILAND logo and branding
+    - ✅ Compact horizontal design optimized for 980x552px window
+    - ✅ Real-time statistics: modpack counter and installed modpacks
+    - ✅ Smooth animations with gradients and glow effects
+  - **Redesigned navigation tabs:**
+    - ✅ Tabs with SVG icons for "Custom Installations" and "TECNILAND Servers"
+    - ✅ Clear visual states: hover, active, inactive
+    - ✅ Active tab indicator with bottom border animation
+  - **Card system with animations:**
+    - ✅ Cards with micro-animations: staggered entrance animation
+    - ✅ Hover states with elevation and color changes
+    - ✅ Selected state with animated pulsating glow
+    - ✅ Gradient effects on hover for visual depth
+  - **Micro-animations and transitions:**
+    - ✅ `cardSlideIn` animation with staggered delay for each element
+    - ✅ `selectedPulse` animation for selected state
+    - ✅ `heroFadeIn` animation for Hero Header entrance
+    - ✅ Smooth transitions with cubic-bezier for fluid feeling
+  - **Perfect centering and symmetry:**
+    - ✅ All elements with fixed 450px width
+    - ✅ Vertical centering with `justify-content: center`
+    - ✅ Horizontal centering with `align-items: center` and `margin: 0 auto`
+    - ✅ Optimized for default window (980x552) and maximized
+  - **Visual consistency in installation editor:**
+    - ✅ Loader buttons with coherent SVG icons
+    - ✅ Unified styles between selector and editor
+  - **Benefit:** Modern and professional interface that significantly improves user experience with fluid animations, intuitive navigation, and aesthetics consistent with TECNILAND branding.
 
 ---
 
@@ -134,24 +197,62 @@ We've thoroughly tested all Forge versions from Minecraft 1.13 to 1.21.x. Here a
   - Hide Fabric, Quilt, NeoForge by default.
   - Warning modal for developers.
 
-### 🎯 Phase 3: Import and Advanced Management
+### 🎯 Phase 3: TECNILAND Modpacks - Advanced Features
 
-- [ ] **Import Modpacks ZIP** - Drag & drop or file selector.
-  - Automatic extraction.
-  - Structure validation.
-  - Installation in `instances/` folder.
+> ✅ **Base system completed:** Detection, badges, context menu, uninstall, and automatic update management.
 
-- [ ] **Advanced Modpack Manager**
-  - Modpack preview.
-  - Creator information.
-  - Version history.
-  - Automatic updates.
+Objective: Expand modpack system with premium features and improved experience.
+
+**Tasks by priority:**
+
+**High:**
+- [ ] **Modpack preview (expanded card)**
+  - Screenshot/preview image
+  - Extended markdown description
+  - List of main included mods
+  - Minimum system requirements
+
+- [ ] **Stable/Beta channels for modpacks**
+  - Channel selector in settings
+  - Beta channel: experimental versions with warning
+  - Stable channel: tested versions only
+
+- [ ] **Creator information**
+  - Author/team name
+  - Links: Discord, Twitter, official website
+  - Release notes (changelog)
+
+**Medium:**
+- [ ] **Version history**
+  - View complete changelog
+  - Rollback to previous version
+  - Version comparison
+
+- [ ] **Modpack statistics**
+  - Download count
+  - Community rating
+  - Last update date
+
+- [ ] **Import external ZIP modpacks**
+  - Drag & drop or file selector
+  - Structure validation
+  - Conversion to TECNILAND format
+
+**Low:**
+- [ ] **Favorites system**
+  - Mark modpacks as favorites
+  - Quick filter
+  - Update notifications for favorites only
 
 ### 🌐 Phase 4: Integration and Community
 
-- [ ] **Discord Rich Presence** - Show status on Discord.
-  - "Playing in [Modpack Name] - MC [Version]".
-  - Play time.
+- [x] **Discord Rich Presence** - ✅ Completed
+  - ✅ Idle mode: "Browsing TECNILAND Nexus"
+  - ✅ Playing mode: "Playing in [Modpack Name] - MC [Version]"
+  - ✅ Elapsed play time for current session
+  - ✅ Interactive buttons: "Join Discord" and "Visit Server"
+  - ✅ Configuration toggle to enable/disable
+  - ✅ Real-time automatic updates
 
 - [ ] **Custom Skins System**
   - Upload skins with offline account.

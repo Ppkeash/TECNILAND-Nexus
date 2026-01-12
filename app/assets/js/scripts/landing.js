@@ -154,7 +154,7 @@ async function resolveSelectedLaunchTarget(distro, logger, opts) {
         }
     }
 
-    // Servidor TECNILAND (distribución)
+    // Servidor TECNILAND (distribución / modpack)
     const serverId = ConfigManager.getSelectedServer()
     const distroResolved = distro || (await DistroAPI.getDistribution())
     const server = distroResolved.getServerById(serverId)
@@ -164,10 +164,27 @@ async function resolveSelectedLaunchTarget(distro, logger, opts) {
         return null
     }
 
+    // Check if modpack is installed before launching
+    const modpackInstallation = ConfigManager.getModpackInstallation(serverId)
+    if (modpackInstallation) {
+        // Modpack is managed by ModpackManager
+        if (modpackInstallation.status !== 'installed') {
+            logger.error(`Modpack ${serverId} no está instalado correctamente (status: ${modpackInstallation.status})`)
+            showLaunchFailure(opts.failureTitle, opts.modpackNotInstalledText || 'El modpack no está instalado. Por favor, instálalo desde la sección Modpacks TECNILAND.')
+            return null
+        }
+        
+        // Update last played
+        ConfigManager.updateModpackLastPlayed(serverId)
+        ConfigManager.save()
+        logger.info(`Launching modpack: ${serverId} (v${modpackInstallation.version})`)
+    }
+
     return {
         kind: 'distro',
         server,
-        serverId
+        serverId,
+        modpackInstallation // Include for reference
     }
 }
 
@@ -948,8 +965,8 @@ async function downloadJava(effectiveJavaOptions, launchAfter = true) {
 
 // Keep reference to Minecraft Process
 let proc
-// Is DiscordRPC enabled
-let hasRPC = false
+// NOTA: Discord RPC se maneja únicamente en uibinder.js para estado idle del launcher
+// La presencia in-game se delega a mods como CraftPresence
 // Joined server regex
 // Change this if your server uses something different.
 const GAME_JOINED_REGEX = /\[.+\]: Sound engine started/
@@ -1266,15 +1283,53 @@ async function dlAsync(login = true) {
         let pb = new ProcessBuilder(serv, versionData, modLoaderData, authUser, remote.app.getVersion())
         setLaunchDetails(Lang.queryJS('landing.dlAsync.launchingGame'))
 
+        // ============================================================
+        // Discord RPC para instancias custom/vanilla
+        // Servidores TECNILAND: presencia in-game se delega a mods
+        // ============================================================
+        if (!isDistroServer && distro.rawDistribution.discord) {
+            const genericDiscordSettings = {
+                shortId: 'Custom',
+                largeImageKey: 'launcher-icon',
+                largeImageText: 'Minecraft desde TECNILAND Nexus'
+            }
+
+            // Construir descripción de versión y loader
+            let versionInfo = 'Minecraft'
+            if (target.kind === 'optifine-auto') {
+                versionInfo = `Versión: ${target.autoProfile.minecraftVersion} (OptiFine)`
+            } else if (target.kind === 'custom') {
+                const loaderType = target.installation.loader?.type || 'Vanilla'
+                const mcVersion = target.installation.loader?.minecraftVersion || 'unknown'
+                const loaderName = loaderType.charAt(0).toUpperCase() + loaderType.slice(1)
+                versionInfo = `Versión: ${mcVersion} (${loaderName})`
+            }
+
+            try {
+                // Verificar si RPC ya está inicializado
+                if (DiscordWrapper.isActive()) {
+                    loggerLaunchSuite.info('[DISCORD] Updating to custom instance presence')
+                    DiscordWrapper.updateDetails('Jugando Minecraft con TECNILAND Nexus')
+                } else {
+                    loggerLaunchSuite.info('[DISCORD] Initializing RPC for custom instance')
+                    DiscordWrapper.initRPC(
+                        distro.rawDistribution.discord,
+                        genericDiscordSettings,
+                        'Jugando Minecraft con TECNILAND Nexus'
+                    )
+                }
+            } catch(err) {
+                loggerLaunchSuite.error('[DISCORD] Failed to set custom instance presence:', err)
+            }
+        }
+
         // const SERVER_JOINED_REGEX = /\[.+\]: \[CHAT\] [a-zA-Z0-9_]{1,16} joined the game/
         const SERVER_JOINED_REGEX = new RegExp(`\\[.+\\]: \\[CHAT\\] ${authUser.displayName} joined the game`)
 
         const onLoadComplete = () => {
             toggleLaunchArea(false)
-            if(proc && hasRPC){
-                DiscordWrapper.updateDetails(Lang.queryJS('landing.discord.loading'))
-                proc.stdout.on('data', gameStateChange)
-            }
+            // Discord RPC in-game se delega a mods como CraftPresence
+            // El launcher no intenta controlar estados in-game
             if(proc) {
                 proc.stdout.removeListener('data', tempListener)
                 proc.stderr.removeListener('data', gameErrorListener)
@@ -1297,15 +1352,8 @@ async function dlAsync(login = true) {
             }
         }
 
-        // Listener for Discord RPC.
-        const gameStateChange = function(data){
-            data = data.trim()
-            if(SERVER_JOINED_REGEX.test(data)){
-                DiscordWrapper.updateDetails(Lang.queryJS('landing.discord.joined'))
-            } else if(GAME_JOINED_REGEX.test(data)){
-                DiscordWrapper.updateDetails(Lang.queryJS('landing.discord.joining'))
-            }
-        }
+        // NOTA: Discord RPC in-game se delega a mods como CraftPresence
+        // El launcher ya no monitorea estados de juego para actualizar Discord
 
         const gameErrorListener = function(data){
             data = data.trim()
@@ -1362,19 +1410,20 @@ async function dlAsync(login = true) {
                 setLaunchEnabled(true)
                 proc = null
                 
-                // Shutdown Discord RPC if it was enabled
-                if(hasRPC) {
-                    loggerLaunchSuite.info('Shutting down Discord Rich Presence..')
-                    DiscordWrapper.shutdownRPC()
-                    hasRPC = false
+                // Discord RPC: volver a presencia idle del launcher
+                // Solo para instancias custom (modpacks TECNILAND delegan a mods in-game)
+                if (!isDistroServer && distro.rawDistribution.discord && DiscordWrapper.isActive()) {
+                    loggerLaunchSuite.info('[DISCORD] Resetting to launcher idle after custom instance closed')
+                    try {
+                        DiscordWrapper.updateDetails(Lang.queryJS('discord.waiting'))
+                    } catch(err) {
+                        loggerLaunchSuite.error('[DISCORD] Failed to reset to idle:', err)
+                    }
                 }
             })
 
-            // Init Discord Hook (only for distribution servers with Discord config)
-            if(isDistroServer && distro.rawDistribution.discord != null && serv.rawServer.discord != null){
-                DiscordWrapper.initRPC(distro.rawDistribution.discord, serv.rawServer.discord)
-                hasRPC = true
-            }
+            // NOTA: Discord RPC in-game se delega a mods como CraftPresence
+            // El launcher mantiene su presencia idle, no intenta cambiarla al lanzar el juego
 
         } catch(err) {
 
@@ -1812,11 +1861,33 @@ async function loadNews(){
     */
 }
 
+/**
+ * Refresh the landing page UI for the currently selected server/modpack.
+ * Called from overlay.js when a modpack is selected for play.
+ */
+async function refreshLandingForSelectedServer() {
+    const serverId = ConfigManager.getSelectedServer()
+    if (!serverId) return
+    
+    try {
+        const distro = await DistroAPI.getDistribution()
+        const server = distro.getServerById(serverId)
+        if (server) {
+            server_selection_button.innerHTML = '&#8226; ' + server.rawServer.name
+            setLaunchEnabled(true)
+            loggerLanding.info(`Landing refreshed for modpack: ${serverId}`)
+        }
+    } catch (err) {
+        loggerLanding.error('Failed to refresh landing for modpack:', err)
+    }
+}
+
 // Expose necessary functions globally for other scripts
 // These functions are called from uibinder.js, overlay.js, and settings.js
 window.updateSelectedServer = updateSelectedServer
 window.updateSelectedAccount = updateSelectedAccount
 window.refreshServerStatus = refreshServerStatus
+window.refreshLandingForSelectedServer = refreshLandingForSelectedServer
 window.initNews = initNews
 window.reloadNews = reloadNews
 

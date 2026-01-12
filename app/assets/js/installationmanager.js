@@ -4,6 +4,8 @@
  */
 
 const crypto = require('crypto')
+const path = require('path')
+const fs = require('fs-extra')
 const { LoggerUtil } = require('helios-core')
 const JavaManager = require('./javamanager')
 
@@ -535,4 +537,561 @@ exports.getEffectiveVersionId = function(installation) {
         default:
             return loader.minecraftVersion
     }
+}
+// ============================================================================
+// UPGRADE-IN-PLACE SYSTEM
+// Sistema de actualización de instancias sin crear nuevas carpetas
+// ============================================================================
+
+/**
+ * Comparar dos versiones de Minecraft para determinar upgrade/downgrade
+ * @param {string} oldVersion - Versión antigua (ej: "1.19.2")
+ * @param {string} newVersion - Versión nueva (ej: "1.20.1")
+ * @returns {number} -1 si downgrade, 0 si igual, 1 si upgrade
+ */
+function compareMinecraftVersions(oldVersion, newVersion) {
+    if (oldVersion === newVersion) return 0
+    
+    const oldParts = oldVersion.split('.').map(p => parseInt(p, 10) || 0)
+    const newParts = newVersion.split('.').map(p => parseInt(p, 10) || 0)
+    
+    // Normalizar a 3 partes
+    while (oldParts.length < 3) oldParts.push(0)
+    while (newParts.length < 3) newParts.push(0)
+    
+    for (let i = 0; i < 3; i++) {
+        if (newParts[i] > oldParts[i]) return 1  // Upgrade
+        if (newParts[i] < oldParts[i]) return -1 // Downgrade
+    }
+    
+    return 0
+}
+
+exports.compareMinecraftVersions = compareMinecraftVersions
+
+/**
+ * Analizar los cambios entre la instalación actual y el nuevo perfil
+ * @param {Object} currentInstall - Instalación actual
+ * @param {Object} newProfile - Nuevo perfil {loaderType, minecraftVersion, loaderVersion, name}
+ * @returns {Object} Análisis de cambios
+ */
+exports.analyzeUpgradeChanges = function(currentInstall, newProfile) {
+    const changes = {
+        nameChanged: currentInstall.name !== newProfile.name,
+        mcVersionChanged: currentInstall.loader.minecraftVersion !== newProfile.minecraftVersion,
+        loaderTypeChanged: currentInstall.loader.type !== newProfile.loaderType,
+        loaderVersionChanged: currentInstall.loader.loaderVersion !== newProfile.loaderVersion,
+        
+        // Detalles
+        oldMcVersion: currentInstall.loader.minecraftVersion,
+        newMcVersion: newProfile.minecraftVersion,
+        oldLoaderType: currentInstall.loader.type,
+        newLoaderType: newProfile.loaderType,
+        oldLoaderVersion: currentInstall.loader.loaderVersion,
+        newLoaderVersion: newProfile.loaderVersion,
+        
+        // Flags de riesgo
+        isDowngrade: false,
+        requiresModDisable: false,
+        requiresBackup: false,
+        
+        // Resumen legible
+        summary: []
+    }
+    
+    // Detectar upgrade/downgrade de MC version
+    if (changes.mcVersionChanged) {
+        const comparison = compareMinecraftVersions(changes.oldMcVersion, changes.newMcVersion)
+        changes.isDowngrade = comparison < 0
+        changes.requiresBackup = true
+        
+        if (changes.isDowngrade) {
+            changes.summary.push(`⚠️ DOWNGRADE: ${changes.oldMcVersion} → ${changes.newMcVersion}`)
+        } else {
+            changes.summary.push(`📈 Upgrade MC: ${changes.oldMcVersion} → ${changes.newMcVersion}`)
+        }
+    }
+    
+    // Detectar cambio de loader
+    if (changes.loaderTypeChanged) {
+        changes.requiresModDisable = true
+        changes.requiresBackup = true
+        changes.summary.push(`🔄 Cambio de loader: ${changes.oldLoaderType} → ${changes.newLoaderType}`)
+    } else if (changes.loaderVersionChanged) {
+        changes.summary.push(`📦 Versión de loader: ${changes.oldLoaderVersion} → ${changes.newLoaderVersion}`)
+    }
+    
+    if (changes.nameChanged) {
+        changes.summary.push(`📝 Nombre: ${currentInstall.name} → ${newProfile.name}`)
+    }
+    
+    // Flag general: ¿hay cambios reales?
+    changes.hasChanges = changes.mcVersionChanged || changes.loaderTypeChanged || 
+                         changes.loaderVersionChanged || changes.nameChanged
+    
+    return changes
+}
+
+/**
+ * Crear backup de una instancia antes del upgrade
+ * @param {string} instanceId - ID de la instancia
+ * @param {string} reason - Razón del backup (ej: "upgrade-1.19.2-to-1.20.1")
+ * @returns {Object} {success: boolean, backupPath: string, error?: string}
+ */
+exports.createInstanceBackup = async function(instanceId, reason = 'manual') {
+    const ConfigManager = require('./configmanager')
+    
+    const instancePath = path.join(ConfigManager.getInstanceDirectory(), instanceId)
+    const backupsDir = path.join(ConfigManager.getDataDirectory(), 'instances-backups')
+    
+    // Crear directorio de backups si no existe
+    fs.ensureDirSync(backupsDir)
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const backupName = `${instanceId}_${reason}_${timestamp}`
+    const backupPath = path.join(backupsDir, backupName)
+    
+    try {
+        if (!fs.existsSync(instancePath)) {
+            logger.warn(`[Backup] Instance path does not exist: ${instancePath}`)
+            // No es un error fatal, la instancia puede ser nueva
+            return {
+                success: true,
+                backupPath: null,
+                skipped: true,
+                message: 'Instancia sin datos aún'
+            }
+        }
+        
+        // Copiar toda la carpeta de la instancia
+        logger.info(`[Backup] Creando backup: ${backupPath}`)
+        await fs.copy(instancePath, backupPath, {
+            preserveTimestamps: true,
+            errorOnExist: false
+        })
+        
+        // Crear archivo de metadatos del backup
+        const backupMeta = {
+            instanceId,
+            reason,
+            timestamp: new Date().toISOString(),
+            sourcePath: instancePath,
+            backupPath
+        }
+        await fs.writeJson(path.join(backupPath, '_backup_meta.json'), backupMeta, { spaces: 2 })
+        
+        logger.info(`[Backup] Backup completado: ${backupPath}`)
+        
+        return {
+            success: true,
+            backupPath,
+            timestamp: backupMeta.timestamp
+        }
+        
+    } catch (err) {
+        logger.error(`[Backup] Error creando backup: ${err.message}`)
+        return {
+            success: false,
+            backupPath: null,
+            error: err.message
+        }
+    }
+}
+
+/**
+ * Deshabilitar mods moviendo la carpeta mods/ a mods.disabled/
+ * @param {string} instanceId - ID de la instancia
+ * @returns {Object} {success: boolean, modsCount: number, error?: string}
+ */
+exports.disableInstanceMods = async function(instanceId) {
+    const ConfigManager = require('./configmanager')
+    
+    const instancePath = path.join(ConfigManager.getInstanceDirectory(), instanceId)
+    const modsPath = path.join(instancePath, 'mods')
+    const modsDisabledPath = path.join(instancePath, 'mods.disabled')
+    
+    try {
+        if (!fs.existsSync(modsPath)) {
+            logger.info(`[DisableMods] No hay carpeta mods/ en ${instanceId}`)
+            return { success: true, modsCount: 0 }
+        }
+        
+        // Contar mods
+        const modFiles = fs.readdirSync(modsPath).filter(f => f.endsWith('.jar'))
+        
+        if (modFiles.length === 0) {
+            logger.info(`[DisableMods] Carpeta mods/ vacía en ${instanceId}`)
+            return { success: true, modsCount: 0 }
+        }
+        
+        // Si ya existe mods.disabled, mover contenido a un subfolder con timestamp
+        if (fs.existsSync(modsDisabledPath)) {
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+            const archivePath = path.join(modsDisabledPath, `_archived_${timestamp}`)
+            
+            // Mover archivos existentes al archivo
+            const existingFiles = fs.readdirSync(modsDisabledPath)
+            if (existingFiles.length > 0) {
+                fs.ensureDirSync(archivePath)
+                for (const file of existingFiles) {
+                    if (!file.startsWith('_archived_')) {
+                        await fs.move(
+                            path.join(modsDisabledPath, file),
+                            path.join(archivePath, file)
+                        )
+                    }
+                }
+            }
+        }
+        
+        // Mover mods/ → mods.disabled/
+        logger.info(`[DisableMods] Moviendo ${modFiles.length} mods a mods.disabled/`)
+        await fs.move(modsPath, modsDisabledPath, { overwrite: true })
+        
+        // Crear carpeta mods/ vacía
+        fs.ensureDirSync(modsPath)
+        
+        logger.info(`[DisableMods] ${modFiles.length} mods deshabilitados en ${instanceId}`)
+        
+        return {
+            success: true,
+            modsCount: modFiles.length,
+            modsDisabledPath
+        }
+        
+    } catch (err) {
+        logger.error(`[DisableMods] Error: ${err.message}`)
+        return {
+            success: false,
+            modsCount: 0,
+            error: err.message
+        }
+    }
+}
+
+/**
+ * Restaurar mods desde mods.disabled/
+ * @param {string} instanceId - ID de la instancia
+ * @returns {Object} {success: boolean, modsCount: number}
+ */
+exports.restoreInstanceMods = async function(instanceId) {
+    const ConfigManager = require('./configmanager')
+    
+    const instancePath = path.join(ConfigManager.getInstanceDirectory(), instanceId)
+    const modsPath = path.join(instancePath, 'mods')
+    const modsDisabledPath = path.join(instancePath, 'mods.disabled')
+    
+    try {
+        if (!fs.existsSync(modsDisabledPath)) {
+            return { success: true, modsCount: 0 }
+        }
+        
+        // Contar mods a restaurar (excluyendo carpetas _archived_)
+        const modFiles = fs.readdirSync(modsDisabledPath)
+            .filter(f => f.endsWith('.jar'))
+        
+        if (modFiles.length === 0) {
+            return { success: true, modsCount: 0 }
+        }
+        
+        // Mover de vuelta
+        for (const mod of modFiles) {
+            await fs.move(
+                path.join(modsDisabledPath, mod),
+                path.join(modsPath, mod),
+                { overwrite: true }
+            )
+        }
+        
+        logger.info(`[RestoreMods] ${modFiles.length} mods restaurados en ${instanceId}`)
+        
+        return {
+            success: true,
+            modsCount: modFiles.length
+        }
+        
+    } catch (err) {
+        logger.error(`[RestoreMods] Error: ${err.message}`)
+        return {
+            success: false,
+            modsCount: 0,
+            error: err.message
+        }
+    }
+}
+
+/**
+ * Restaurar una instancia desde un backup
+ * @param {string} backupPath - Ruta al backup
+ * @param {string} instanceId - ID de la instancia destino
+ * @returns {Object} {success: boolean, error?: string}
+ */
+exports.restoreFromBackup = async function(backupPath, instanceId) {
+    const ConfigManager = require('./configmanager')
+    
+    const instancePath = path.join(ConfigManager.getInstanceDirectory(), instanceId)
+    
+    try {
+        if (!fs.existsSync(backupPath)) {
+            return { success: false, error: 'Backup no encontrado' }
+        }
+        
+        // Eliminar instancia actual
+        if (fs.existsSync(instancePath)) {
+            await fs.remove(instancePath)
+        }
+        
+        // Copiar backup a instancia
+        await fs.copy(backupPath, instancePath, {
+            preserveTimestamps: true
+        })
+        
+        // Eliminar archivo de metadatos del backup
+        const metaPath = path.join(instancePath, '_backup_meta.json')
+        if (fs.existsSync(metaPath)) {
+            await fs.remove(metaPath)
+        }
+        
+        logger.info(`[Restore] Instancia ${instanceId} restaurada desde backup`)
+        
+        return { success: true }
+        
+    } catch (err) {
+        logger.error(`[Restore] Error: ${err.message}`)
+        return { success: false, error: err.message }
+    }
+}
+
+/**
+ * Obtener lista de backups disponibles para una instancia
+ * @param {string} instanceId - ID de la instancia
+ * @returns {Array} Lista de backups [{path, timestamp, reason}]
+ */
+exports.getInstanceBackups = function(instanceId) {
+    const ConfigManager = require('./configmanager')
+    const backupsDir = path.join(ConfigManager.getDataDirectory(), 'instances-backups')
+    
+    if (!fs.existsSync(backupsDir)) {
+        return []
+    }
+    
+    const backups = []
+    const entries = fs.readdirSync(backupsDir)
+    
+    for (const entry of entries) {
+        if (entry.startsWith(instanceId + '_')) {
+            const backupPath = path.join(backupsDir, entry)
+            const metaPath = path.join(backupPath, '_backup_meta.json')
+            
+            let meta = { timestamp: 'unknown', reason: 'unknown' }
+            if (fs.existsSync(metaPath)) {
+                try {
+                    meta = fs.readJsonSync(metaPath)
+                } catch (e) {
+                    // Ignorar errores de lectura
+                }
+            }
+            
+            backups.push({
+                name: entry,
+                path: backupPath,
+                timestamp: meta.timestamp,
+                reason: meta.reason
+            })
+        }
+    }
+    
+    // Ordenar por timestamp descendente (más reciente primero)
+    backups.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    
+    return backups
+}
+
+/**
+ * FUNCIÓN PRINCIPAL: Actualizar una instancia in-place
+ * 
+ * @param {string} instanceId - ID de la instancia a actualizar
+ * @param {Object} newProfile - Nuevo perfil
+ * @param {string} newProfile.name - Nombre de la instalación
+ * @param {string} newProfile.loaderType - Tipo de loader (vanilla/forge/fabric/quilt/neoforge)
+ * @param {string} newProfile.minecraftVersion - Versión de Minecraft
+ * @param {string|null} newProfile.loaderVersion - Versión del loader (null para vanilla)
+ * @param {Object} options - Opciones
+ * @param {boolean} options.skipBackup - Saltar backup (NO RECOMENDADO)
+ * @param {boolean} options.forceModDisable - Forzar deshabilitación de mods incluso si no cambia loader
+ * @returns {Object} Resultado del upgrade
+ */
+exports.upgradeInstanceInPlace = async function(instanceId, newProfile, options = {}) {
+    const ConfigManager = require('./configmanager')
+    
+    const result = {
+        success: false,
+        backupPath: null,
+        modsDisabled: 0,
+        changes: null,
+        error: null,
+        warnings: []
+    }
+    
+    try {
+        // 1. Obtener instalación actual
+        const currentInstall = ConfigManager.getInstallation(instanceId)
+        if (!currentInstall) {
+            result.error = `Instalación no encontrada: ${instanceId}`
+            return result
+        }
+        
+        // 2. Analizar cambios
+        const changes = exports.analyzeUpgradeChanges(currentInstall, newProfile)
+        result.changes = changes
+        
+        if (!changes.hasChanges) {
+            result.success = true
+            result.warnings.push('No hay cambios que aplicar')
+            return result
+        }
+        
+        logger.info(`[Upgrade] Iniciando upgrade de ${instanceId}`)
+        logger.info(`[Upgrade] Cambios: ${changes.summary.join(', ')}`)
+        
+        // 3. Crear backup (obligatorio a menos que se salte explícitamente)
+        if (!options.skipBackup && changes.requiresBackup) {
+            const backupReason = changes.isDowngrade ? 
+                `downgrade-${changes.oldMcVersion}-to-${changes.newMcVersion}` :
+                `upgrade-${changes.oldMcVersion}-to-${changes.newMcVersion}`
+            
+            const backupResult = await exports.createInstanceBackup(instanceId, backupReason)
+            
+            if (!backupResult.success && !backupResult.skipped) {
+                result.error = `Error creando backup: ${backupResult.error}`
+                return result
+            }
+            
+            result.backupPath = backupResult.backupPath
+            
+            if (backupResult.backupPath) {
+                logger.info(`[Upgrade] Backup creado: ${backupResult.backupPath}`)
+            }
+        }
+        
+        // 4. Deshabilitar mods si cambia loader
+        if (changes.loaderTypeChanged || options.forceModDisable) {
+            const disableResult = await exports.disableInstanceMods(instanceId)
+            
+            if (!disableResult.success) {
+                result.warnings.push(`Error deshabilitando mods: ${disableResult.error}`)
+            } else if (disableResult.modsCount > 0) {
+                result.modsDisabled = disableResult.modsCount
+                logger.info(`[Upgrade] ${disableResult.modsCount} mods deshabilitados`)
+            }
+        }
+        
+        // 5. Actualizar metadata de la instalación
+        const updates = {
+            name: newProfile.name,
+            loader: {
+                type: newProfile.loaderType,
+                minecraftVersion: newProfile.minecraftVersion,
+                loaderVersion: newProfile.loaderVersion || null
+            }
+        }
+        
+        // Registrar historial de upgrade
+        if (!currentInstall.upgradeHistory) {
+            currentInstall.upgradeHistory = []
+        }
+        
+        currentInstall.upgradeHistory.push({
+            timestamp: new Date().toISOString(),
+            from: {
+                mcVersion: changes.oldMcVersion,
+                loaderType: changes.oldLoaderType,
+                loaderVersion: changes.oldLoaderVersion
+            },
+            to: {
+                mcVersion: changes.newMcVersion,
+                loaderType: changes.newLoaderType,
+                loaderVersion: changes.newLoaderVersion
+            },
+            backupPath: result.backupPath
+        })
+        
+        updates.upgradeHistory = currentInstall.upgradeHistory
+        updates.lastUpgrade = new Date().toISOString()
+        
+        // Limpiar estado de error previo si existe
+        updates.upgradeFailed = null
+        
+        const updated = ConfigManager.updateInstallation(instanceId, updates)
+        
+        if (!updated) {
+            result.error = 'Error actualizando metadata de instalación'
+            // Marcar como fallido para recovery
+            ConfigManager.updateInstallation(instanceId, {
+                upgradeFailed: {
+                    timestamp: new Date().toISOString(),
+                    targetProfile: newProfile,
+                    backupPath: result.backupPath,
+                    error: result.error
+                }
+            })
+            ConfigManager.save()
+            return result
+        }
+        
+        ConfigManager.save()
+        
+        logger.info(`[Upgrade] Upgrade completado exitosamente para ${instanceId}`)
+        
+        result.success = true
+        return result
+        
+    } catch (err) {
+        logger.error(`[Upgrade] Error durante upgrade: ${err.message}`)
+        result.error = err.message
+        
+        // Intentar marcar como fallido para recovery
+        try {
+            const ConfigManager = require('./configmanager')
+            ConfigManager.updateInstallation(instanceId, {
+                upgradeFailed: {
+                    timestamp: new Date().toISOString(),
+                    targetProfile: newProfile,
+                    backupPath: result.backupPath,
+                    error: err.message
+                }
+            })
+            ConfigManager.save()
+        } catch (e) {
+            logger.error(`[Upgrade] Error guardando estado fallido: ${e.message}`)
+        }
+        
+        return result
+    }
+}
+
+/**
+ * Verificar si una instancia tiene un upgrade fallido pendiente
+ * @param {string} instanceId - ID de la instancia
+ * @returns {Object|null} Información del upgrade fallido o null
+ */
+exports.getFailedUpgrade = function(instanceId) {
+    const ConfigManager = require('./configmanager')
+    const install = ConfigManager.getInstallation(instanceId)
+    
+    if (install && install.upgradeFailed) {
+        return install.upgradeFailed
+    }
+    
+    return null
+}
+
+/**
+ * Limpiar estado de upgrade fallido
+ * @param {string} instanceId - ID de la instancia
+ */
+exports.clearFailedUpgrade = function(instanceId) {
+    const ConfigManager = require('./configmanager')
+    ConfigManager.updateInstallation(instanceId, { upgradeFailed: null })
+    ConfigManager.save()
 }

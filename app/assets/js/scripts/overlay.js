@@ -133,6 +133,342 @@ async function toggleServerSelection(toggleState){
     toggleOverlay(toggleState, true, 'serverSelectContent')
 }
 
+// ============================================================================
+// UPGRADE-IN-PLACE: UI de confirmación
+// ============================================================================
+
+/**
+ * Mostrar overlay de confirmación para upgrade de instancia
+ * @param {string} instanceId - ID de la instancia
+ * @param {Object} currentInstall - Instalación actual
+ * @param {Object} newProfile - Nuevo perfil
+ * @param {Object} changes - Análisis de cambios de InstallationManager.analyzeUpgradeChanges()
+ */
+async function showUpgradeConfirmationOverlay(instanceId, currentInstall, newProfile, changes) {
+    const fs = require('fs-extra')
+    const path = require('path')
+    
+    // Ocultar editor de instalaciones
+    document.getElementById('installationEditorContent').style.display = 'none'
+    
+    // Preparar resumen de cambios
+    let summaryHtml = '<div style="text-align: left; margin: 15px 0;">'
+    
+    // Título del resumen
+    summaryHtml += '<div style="font-weight: bold; margin-bottom: 10px; color: #4fc3f7;">📋 Resumen de cambios:</div>'
+    
+    // Cambios detallados
+    summaryHtml += '<ul style="margin: 0; padding-left: 20px; line-height: 1.8;">'
+    
+    for (const change of changes.summary) {
+        summaryHtml += `<li>${change}</li>`
+    }
+    
+    summaryHtml += '</ul>'
+    
+    // Sección: Datos preservados
+    summaryHtml += '<div style="margin-top: 15px; padding: 10px; background: rgba(76, 175, 80, 0.2); border-radius: 6px; border-left: 3px solid #4caf50;">'
+    summaryHtml += '<strong style="color: #81c784;">✅ Se preservará:</strong><br>'
+    summaryHtml += '• saves/ (mundos)<br>'
+    summaryHtml += '• options.txt (configuración)<br>'
+    summaryHtml += '• resourcepacks/<br>'
+    summaryHtml += '• screenshots/'
+    summaryHtml += '</div>'
+    
+    // Sección: Mods (solo si cambia loader)
+    if (changes.loaderTypeChanged) {
+        // Verificar si hay mods
+        const instancePath = path.join(ConfigManager.getInstanceDirectory(), instanceId)
+        const modsPath = path.join(instancePath, 'mods')
+        let modsCount = 0
+        
+        if (fs.existsSync(modsPath)) {
+            const modFiles = fs.readdirSync(modsPath).filter(f => f.endsWith('.jar'))
+            modsCount = modFiles.length
+        }
+        
+        if (modsCount > 0) {
+            summaryHtml += '<div style="margin-top: 10px; padding: 10px; background: rgba(255, 152, 0, 0.2); border-radius: 6px; border-left: 3px solid #ff9800;">'
+            summaryHtml += `<strong style="color: #ffb74d;">⚠️ Mods (${modsCount}):</strong><br>`
+            summaryHtml += 'Se moverán a <code>mods.disabled/</code> por compatibilidad.<br>'
+            summaryHtml += '<small>Actualiza tus mods para el nuevo loader y restaurálos manualmente.</small>'
+            summaryHtml += '</div>'
+        }
+    }
+    
+    // Sección: Backup
+    summaryHtml += '<div style="margin-top: 10px; padding: 10px; background: rgba(33, 150, 243, 0.2); border-radius: 6px; border-left: 3px solid #2196f3;">'
+    summaryHtml += '<strong style="color: #64b5f6;">💾 Backup automático:</strong><br>'
+    summaryHtml += 'Se creará un backup completo antes de aplicar cambios.'
+    summaryHtml += '</div>'
+    
+    summaryHtml += '</div>'
+    
+    // Warning adicional para downgrade
+    if (changes.isDowngrade) {
+        setOverlayContent(
+            '⚠️ Confirmación de DOWNGRADE',
+            `<div style="color: #ef5350; font-weight: bold; margin-bottom: 10px;">
+                ¡ATENCIÓN! Estás bajando la versión de Minecraft.
+            </div>
+            <div style="margin-bottom: 15px;">
+                Esto puede causar <strong>corrupción irreversible</strong> de mundos si fueron 
+                abiertos en versiones más nuevas.
+            </div>
+            ${summaryHtml}
+            <div style="margin-top: 15px; padding: 10px; background: rgba(244, 67, 54, 0.2); border-radius: 6px;">
+                <label style="cursor: pointer;">
+                    <input type="checkbox" id="downgradeConfirmCheck" style="margin-right: 8px;">
+                    <strong>Entiendo el riesgo de corrupción y deseo continuar</strong>
+                </label>
+            </div>`,
+            '🔄 Aplicar Downgrade',
+            'Cancelar'
+        )
+        
+        // Handler especial para downgrade: requiere checkbox
+        setOverlayHandler(async () => {
+            const checkbox = document.getElementById('downgradeConfirmCheck')
+            if (!checkbox || !checkbox.checked) {
+                // Mostrar error temporal
+                const desc = document.getElementById('overlayDesc')
+                const originalColor = desc.style.borderColor
+                desc.style.border = '2px solid #ef5350'
+                setTimeout(() => {
+                    desc.style.border = originalColor ? `2px solid ${originalColor}` : 'none'
+                }, 1000)
+                return
+            }
+            
+            toggleOverlay(false)
+            await executeUpgradeInPlace(instanceId, newProfile, changes)
+        })
+        
+    } else {
+        // Upgrade normal o cambio de loader
+        const title = changes.loaderTypeChanged ? 
+            '🔄 Confirmar cambio de loader' : 
+            '📈 Confirmar actualización'
+        
+        setOverlayContent(
+            title,
+            summaryHtml,
+            '✅ Aplicar cambios',
+            'Cancelar'
+        )
+        
+        setOverlayHandler(async () => {
+            toggleOverlay(false)
+            await executeUpgradeInPlace(instanceId, newProfile, changes)
+        })
+    }
+    
+    // Handler de cancelar
+    setDismissHandler(() => {
+        toggleOverlay(false)
+        // Reabrir editor
+        document.getElementById('installationEditorContent').style.display = 'block'
+    })
+    
+    toggleOverlay(true, true)
+}
+
+/**
+ * Ejecutar el upgrade-in-place después de confirmación
+ */
+async function executeUpgradeInPlace(instanceId, newProfile, changes) {
+    // Mostrar overlay de progreso
+    setOverlayContent(
+        '⏳ Aplicando cambios...',
+        '<div style="text-align: center;">' +
+        '<div style="font-size: 48px; margin-bottom: 20px;">🔄</div>' +
+        '<div>Creando backup y actualizando instalación...</div>' +
+        '<div style="margin-top: 10px; color: rgba(255,255,255,0.6);">No cierres el launcher</div>' +
+        '</div>',
+        'Espera...'
+    )
+    document.getElementById('overlayAcknowledge').disabled = true
+    document.getElementById('overlayDismiss').style.display = 'none'
+    toggleOverlay(true, false)
+    
+    try {
+        // Ejecutar upgrade
+        const result = await InstallationManager.upgradeInstanceInPlace(instanceId, newProfile)
+        
+        if (result.success) {
+            // Éxito
+            let successMsg = '<div style="text-align: center;">'
+            successMsg += '<div style="font-size: 48px; margin-bottom: 20px;">✅</div>'
+            successMsg += '<div style="font-weight: bold; color: #81c784;">Instalación actualizada correctamente</div>'
+            
+            if (result.backupPath) {
+                successMsg += '<div style="margin-top: 15px; padding: 10px; background: rgba(33, 150, 243, 0.2); border-radius: 6px;">'
+                successMsg += '<strong>💾 Backup creado en:</strong><br>'
+                successMsg += `<code style="font-size: 11px; word-break: break-all;">${result.backupPath}</code>`
+                successMsg += '</div>'
+            }
+            
+            if (result.modsDisabled > 0) {
+                successMsg += '<div style="margin-top: 10px; padding: 10px; background: rgba(255, 152, 0, 0.2); border-radius: 6px;">'
+                successMsg += `<strong>⚠️ ${result.modsDisabled} mods deshabilitados</strong><br>`
+                successMsg += 'Revisa <code>mods.disabled/</code> en tu instancia.'
+                successMsg += '</div>'
+            }
+            
+            if (result.warnings && result.warnings.length > 0) {
+                successMsg += '<div style="margin-top: 10px; color: #ffb74d;">'
+                successMsg += result.warnings.join('<br>')
+                successMsg += '</div>'
+            }
+            
+            successMsg += '</div>'
+            
+            setOverlayContent('✅ Upgrade completado', successMsg, 'OK')
+            document.getElementById('overlayAcknowledge').disabled = false
+            setOverlayHandler(async () => {
+                toggleOverlay(false)
+                closeInstallationEditor()
+                await prepareServerSelectionList()
+            })
+            
+        } else {
+            // Error
+            let errorMsg = '<div style="text-align: center;">'
+            errorMsg += '<div style="font-size: 48px; margin-bottom: 20px;">❌</div>'
+            errorMsg += `<div style="color: #ef5350;">${result.error}</div>`
+            
+            if (result.backupPath) {
+                errorMsg += '<div style="margin-top: 15px; padding: 10px; background: rgba(33, 150, 243, 0.2); border-radius: 6px;">'
+                errorMsg += '<strong>💾 Backup disponible:</strong><br>'
+                errorMsg += `<code style="font-size: 11px;">${result.backupPath}</code><br>`
+                errorMsg += '<small>Puedes restaurar manualmente si es necesario.</small>'
+                errorMsg += '</div>'
+            }
+            
+            errorMsg += '</div>'
+            
+            setOverlayContent('❌ Error en upgrade', errorMsg, 'Cerrar', 'Reintentar')
+            document.getElementById('overlayAcknowledge').disabled = false
+            document.getElementById('overlayDismiss').style.display = ''
+            
+            setOverlayHandler(() => {
+                toggleOverlay(false)
+                closeInstallationEditor()
+            })
+            
+            setDismissHandler(() => {
+                toggleOverlay(false)
+                document.getElementById('installationEditorContent').style.display = 'block'
+            })
+        }
+        
+    } catch (err) {
+        console.error('[Upgrade] Error inesperado:', err)
+        
+        setOverlayContent(
+            '❌ Error inesperado',
+            `<div style="text-align: center;">
+                <div style="font-size: 48px; margin-bottom: 20px;">💥</div>
+                <div style="color: #ef5350;">${err.message}</div>
+            </div>`,
+            'Cerrar'
+        )
+        document.getElementById('overlayAcknowledge').disabled = false
+        setOverlayHandler(() => {
+            toggleOverlay(false)
+            closeInstallationEditor()
+        })
+    }
+}
+
+/**
+ * Mostrar overlay para instancias con upgrade fallido (recovery)
+ * @param {string} instanceId - ID de la instancia
+ * @param {Object} failedUpgrade - Info del upgrade fallido
+ */
+function showFailedUpgradeRecovery(instanceId, failedUpgrade) {
+    let recoveryHtml = '<div style="text-align: left;">'
+    recoveryHtml += '<div style="color: #ef5350; margin-bottom: 15px;">Esta instancia tiene un upgrade pendiente que falló.</div>'
+    
+    recoveryHtml += '<div style="padding: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; margin-bottom: 15px;">'
+    recoveryHtml += `<strong>Error:</strong> ${failedUpgrade.error || 'Desconocido'}<br>`
+    recoveryHtml += `<strong>Fecha:</strong> ${new Date(failedUpgrade.timestamp).toLocaleString()}`
+    recoveryHtml += '</div>'
+    
+    if (failedUpgrade.backupPath) {
+        recoveryHtml += '<div style="padding: 10px; background: rgba(33, 150, 243, 0.2); border-radius: 6px;">'
+        recoveryHtml += '<strong>💾 Backup disponible:</strong><br>'
+        recoveryHtml += `<code style="font-size: 11px;">${failedUpgrade.backupPath}</code>`
+        recoveryHtml += '</div>'
+    }
+    
+    recoveryHtml += '</div>'
+    
+    setOverlayContent(
+        '⚠️ Upgrade fallido detectado',
+        recoveryHtml,
+        '🔄 Restaurar desde backup',
+        '❌ Ignorar y continuar'
+    )
+    
+    setOverlayHandler(async () => {
+        if (failedUpgrade.backupPath) {
+            toggleOverlay(false)
+            await restoreInstanceFromBackup(instanceId, failedUpgrade.backupPath)
+        } else {
+            setOverlayContent('❌ Sin backup', 'No hay backup disponible para restaurar.', 'OK')
+            setOverlayHandler(() => toggleOverlay(false))
+        }
+    })
+    
+    setDismissHandler(() => {
+        // Limpiar estado de error
+        InstallationManager.clearFailedUpgrade(instanceId)
+        toggleOverlay(false)
+    })
+    
+    toggleOverlay(true, true)
+}
+
+/**
+ * Restaurar instancia desde backup
+ */
+async function restoreInstanceFromBackup(instanceId, backupPath) {
+    setOverlayContent(
+        '⏳ Restaurando...',
+        '<div style="text-align: center;"><div style="font-size: 48px;">🔄</div><div>Restaurando desde backup...</div></div>',
+        'Espera...'
+    )
+    document.getElementById('overlayAcknowledge').disabled = true
+    toggleOverlay(true, false)
+    
+    const result = await InstallationManager.restoreFromBackup(backupPath, instanceId)
+    
+    if (result.success) {
+        // Limpiar estado de error
+        InstallationManager.clearFailedUpgrade(instanceId)
+        
+        setOverlayContent(
+            '✅ Restauración completada',
+            '<div style="text-align: center;"><div style="font-size: 48px;">✅</div><div>La instancia ha sido restaurada correctamente.</div></div>',
+            'OK'
+        )
+        document.getElementById('overlayAcknowledge').disabled = false
+        setOverlayHandler(async () => {
+            toggleOverlay(false)
+            await prepareServerSelectionList()
+        })
+    } else {
+        setOverlayContent(
+            '❌ Error en restauración',
+            `<div style="text-align: center;"><div style="font-size: 48px;">❌</div><div style="color: #ef5350;">${result.error}</div></div>`,
+            'Cerrar'
+        )
+        document.getElementById('overlayAcknowledge').disabled = false
+        setOverlayHandler(() => toggleOverlay(false))
+    }
+}
+
 /**
  * Set the content of the overlay.
  * 
@@ -338,8 +674,8 @@ async function loadAutoProfilesSection(selectedInstallId) {
         for (const profile of autoProfiles) {
             const isSelected = selectedInstallId === profile.id
             
-            htmlString += `<button class="installationListing autoProfileListing serverListing" installid="${profile.id}" autoprofile="true" profiletype="${profile.type}" versionid="${profile.versionId}" ${isSelected ? 'selected' : ''}>
-                <div style="font-size: 32px; margin-right: 15px;">⚡</div>
+            htmlString += `<button class="installationListing autoProfileListing serverListing instance-card instance-card--optifine" installid="${profile.id}" autoprofile="true" profiletype="${profile.type}" versionid="${profile.versionId}" ${isSelected ? 'selected' : ''}>
+                <div class="instance-card__icon"><img src="assets/images/icons/loaders/optifine.svg" alt="OptiFine" class="instance-card__icon-img"></div>
                 <div class="serverListingDetails">
                     <span class="serverListingName">${profile.name}</span>
                     <span class="serverListingDescription">Minecraft ${profile.minecraftVersion} con OptiFine</span>
@@ -457,10 +793,25 @@ function showAutoProfileInfo(e, versionId) {
 
 function setServerListingHandlers(){
     const listings = Array.from(document.getElementsByClassName('serverListing'))
+    
+    // Import ModpackManager
+    let ModpackManager = null
+    try {
+        ModpackManager = require('./assets/js/modpackmanager')
+    } catch (err) {
+        console.error('[ServerHandlers] ModpackManager not available:', err)
+    }
+    
     listings.map((val) => {
         // Ignorar auto-profiles (tienen su propio handler)
         if (val.classList.contains('autoProfileListing')) return
         
+        // Ignorar instalaciones personalizadas (tienen su propio menú contextual)
+        if (val.classList.contains('installationListing')) return
+        
+        const serverId = val.getAttribute('servid')
+        
+        // Left click: Select server (original behavior)
         val.onclick = e => {
             if(val.hasAttribute('selected')){
                 return
@@ -471,9 +822,243 @@ function setServerListingHandlers(){
             allListings.forEach(listing => listing.removeAttribute('selected'))
             
             val.setAttribute('selected', '')
+            ConfigManager.setSelectedServer(serverId)
             document.activeElement.blur()
         }
+        
+        // Right click: Show modpack options menu (TECNILAND feature)
+        // SOLO para servidores de TECNILAND, NO para instalaciones personalizadas
+        if (ModpackManager) {
+            val.oncontextmenu = async (e) => {
+                e.preventDefault()
+                await showModpackContextMenu(serverId, e.clientX, e.clientY, ModpackManager)
+            }
+        }
     })
+}
+
+// ============================================================================
+// MODPACKS TECNILAND - Context Menu & Operations
+// ============================================================================
+
+/**
+ * Show context menu for modpack operations
+ * @param {string} serverId - Server/Modpack ID
+ * @param {number} x - Mouse X position
+ * @param {number} y - Mouse Y position
+ * @param {Object} ModpackManager - ModpackManager instance
+ */
+async function showModpackContextMenu(serverId, x, y, ModpackManager) {
+    // Get modpack state
+    const state = await ModpackManager.getModpackState(serverId)
+    
+    // ONLY show menu if modpack is installed
+    if (!state.isInstalled) {
+        console.log('[Modpack Menu] Not installed, no menu shown')
+        return
+    }
+    
+    // Remove existing menu
+    const existingMenu = document.getElementById('tecnilandModpackMenu')
+    if (existingMenu) existingMenu.remove()
+    
+    // Create menu
+    const menu = document.createElement('div')
+    menu.id = 'tecnilandModpackMenu'
+    menu.className = 'tecniland-context-menu'
+    
+    // Build menu items (only for INSTALLED modpacks)
+    // Nota: Actualización/Reparación se maneja automáticamente por Helios al presionar "Jugar"
+    const menuItems = `
+        <div class="tecniland-menu-header">
+            <span>🎮 Opciones de Modpack</span>
+        </div>
+        <div class="tecniland-menu-item" data-action="folder" data-server="${serverId}">
+            <span class="tecniland-menu-icon">📂</span>
+            <span class="tecniland-menu-label">Abrir carpeta</span>
+        </div>
+        <div class="tecniland-menu-divider"></div>
+        <div class="tecniland-menu-item danger" data-action="uninstall" data-server="${serverId}">
+            <span class="tecniland-menu-icon">🗑️</span>
+            <span class="tecniland-menu-label">Desinstalar para liberar espacio</span>
+            <span class="tecniland-menu-hint">${state.sizeOnDiskFormatted || 'Liberar espacio'}</span>
+        </div>
+    `
+    
+    menu.innerHTML = menuItems
+    menu.style.left = `${x}px`
+    menu.style.top = `${y}px`
+    
+    document.body.appendChild(menu)
+    
+    // Attach handlers
+    menu.querySelectorAll('.tecniland-menu-item').forEach(item => {
+        item.onclick = async () => {
+            const action = item.dataset.action
+            const server = item.dataset.server
+            menu.remove()
+            
+            await handleModpackAction(action, server, ModpackManager)
+        }
+    })
+    
+    // Close menu on click outside
+    setTimeout(() => {
+        const closeHandler = (e) => {
+            if (!menu.contains(e.target)) {
+                menu.remove()
+                document.removeEventListener('click', closeHandler)
+            }
+        }
+        document.addEventListener('click', closeHandler)
+    }, 100)
+}
+
+/**
+ * Handle modpack actions
+ * @param {string} action - Action to perform
+ * @param {string} serverId - Server ID
+ * @param {Object} ModpackManager - ModpackManager instance
+ */
+async function handleModpackAction(action, serverId, ModpackManager) {
+    console.log('[Modpack Action]', action, 'on', serverId)
+    
+    switch (action) {
+        case 'uninstall':
+            confirmUninstallModpack(serverId, ModpackManager)
+            break
+        case 'folder':
+            openModpackFolder(serverId)
+            break
+    }
+}
+
+// Nota: Las funciones de actualizar/reparar fueron eliminadas.
+// Helios ya maneja esto automáticamente con FullRepair cuando se presiona "Jugar".
+
+/**
+ * Confirm and uninstall modpack
+ */
+function confirmUninstallModpack(serverId, ModpackManager) {
+    // Get current state to show size
+    ModpackManager.getModpackState(serverId).then(state => {
+        const sizeText = state.sizeOnDiskFormatted || 'espacio desconocido'
+        
+        setOverlayContent(
+            '🗑️ Desinstalar Modpack',
+            `¿Deseas desinstalar este modpack para liberar espacio?\n\nSe liberarán aproximadamente: ${sizeText}\n\nTus partidas guardadas se conservarán en una carpeta de respaldo.`,
+            'Cancelar',
+            'Desinstalar'
+        )
+        
+        // Botón "Cancelar" (primario, izquierda)
+        setOverlayHandler(() => {
+            toggleOverlay(false)
+        })
+        
+        // Botón "Desinstalar" (secundario, derecha)
+        setDismissHandler(() => {
+            toggleOverlay(false)
+            // Pequeño delay para que se vea el cierre del overlay
+            setTimeout(() => {
+                uninstallModpack(serverId, ModpackManager)
+            }, 100)
+        })
+        
+        toggleOverlay(true, true)
+    })
+}
+
+/**
+ * Uninstall modpack
+ */
+async function uninstallModpack(serverId, ModpackManager) {
+    try {
+        // Notificación simple
+        showTecnilandNotification('🗑️ Desinstalando modpack...', 'info')
+        
+        // Ejecutar desinstalación
+        const result = await ModpackManager.uninstallModpack(serverId, true)
+        
+        // Mostrar notificación de éxito
+        showTecnilandNotification(`✅ Desinstalado correctamente. ${ModpackManager.formatBytes(result.freedSpace)} liberados`, 'success')
+        
+        // Refrescar lista de servidores
+        await populateServerListings()
+        setServerListingHandlers()
+        
+    } catch (err) {
+        console.error('[Modpack Uninstall Error]', err)
+        showTecnilandNotification(`❌ Error al desinstalar: ${err.message}`, 'error')
+    }
+}
+
+/**
+ * Open modpack folder
+ */
+async function openModpackFolder(serverId) {
+    try {
+        // Construir ruta directamente: .tecnilandnexus/instances/{serverId}
+        const path = require('path')
+        const fs = require('fs-extra')
+        const dataDir = ConfigManager.getDataDirectory()
+        const instancePath = path.join(dataDir, 'instances', serverId)
+        
+        // Verificar que existe
+        const exists = await fs.pathExists(instancePath)
+        if (!exists) {
+            showTecnilandNotification('❌ No se encontró la carpeta de instalación', 'error')
+            console.log('[Modpack Folder] Path not found:', instancePath)
+            return
+        }
+        
+        // Abrir carpeta
+        const { shell } = require('electron')
+        await shell.openPath(instancePath)
+        console.log('[Modpack Folder] Opened:', instancePath)
+        
+    } catch (err) {
+        console.error('[Modpack Folder Error]', err)
+        showTecnilandNotification('❌ Error al abrir carpeta', 'error')
+    }
+}
+
+// Funciones de overlay de progreso eliminadas - no necesarias para abrir carpeta/desinstalar
+
+/**
+ * Show TECNILAND notification
+ */
+function showTecnilandNotification(message, type = 'info') {
+    const colors = {
+        success: '#39FF14',
+        error: '#ff6b6b',
+        info: '#FFD700'
+    }
+    
+    const notif = document.createElement('div')
+    notif.className = 'tecniland-notification'
+    notif.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        padding: 15px 25px;
+        background: rgba(10, 14, 39, 0.95);
+        border: 2px solid ${colors[type]};
+        border-radius: 8px;
+        color: white;
+        font-size: 14px;
+        z-index: 99999;
+        box-shadow: 0 0 20px ${colors[type]}40;
+        animation: slideInRight 0.3s ease;
+    `
+    notif.textContent = message
+    
+    document.body.appendChild(notif)
+    
+    setTimeout(() => {
+        notif.style.animation = 'slideOutRight 0.3s ease'
+        setTimeout(() => notif.remove(), 300)
+    }, 4000)
 }
 
 
@@ -804,9 +1389,42 @@ async function populateServerListings(){
     const distro = await DistroAPI.getDistribution()
     const giaSel = ConfigManager.getSelectedServer()
     const servers = distro.servers
+    
+    // Import ModpackManager for checking installation states
+    let ModpackManager = null
+    try {
+        ModpackManager = require('./assets/js/modpackmanager')
+    } catch (err) {
+        console.error('[ServerListings] ModpackManager not available:', err)
+    }
+    
     let htmlString = ''
     for(const serv of servers){
-        htmlString += `<button class="serverListing" servid="${serv.rawServer.id}" ${serv.rawServer.id === giaSel ? 'selected' : ''}>
+        const serverId = serv.rawServer.id
+        const isSelected = serverId === giaSel
+        
+        // Check modpack installation state
+        let installState = 'not-installed'
+        let installBadge = ''
+        
+        if (ModpackManager) {
+            try {
+                const state = await ModpackManager.getModpackState(serverId)
+                if (state.isInstalled) {
+                    installState = 'installed'
+                    installBadge = '<span class="server-badge-installed">✓ Instalado</span>'
+                    if (state.updateAvailable) {
+                        installState = 'update-available'
+                        installBadge = '<span class="server-badge-update">⬆ Actualización disponible</span>'
+                    }
+                }
+            } catch (err) {
+                // If state check fails, treat as not installed
+                console.log('[ServerListings] Cannot get state for', serverId)
+            }
+        }
+        
+        htmlString += `<button class="serverListing tecniland-server-card ${installState}" servid="${serverId}" ${isSelected ? 'selected' : ''}>
             <img class="serverListingImg" src="${serv.rawServer.icon}"/>
             <div class="serverListingDetails">
                 <span class="serverListingName">${serv.rawServer.name}</span>
@@ -814,6 +1432,7 @@ async function populateServerListings(){
                 <div class="serverListingInfo">
                     <div class="serverListingVersion">${serv.rawServer.minecraftVersion}</div>
                     <div class="serverListingRevision">${serv.rawServer.version}</div>
+                    ${installBadge}
                     ${serv.rawServer.mainServer ? `<div class="serverListingStarWrapper">
                         <svg id="Layer_1" viewBox="0 0 107.45 104.74" width="20px" height="20px">
                             <defs>
@@ -890,19 +1509,20 @@ function populateInstallationListings(){
         htmlString += '<div id="customInstallationsSection">'
         for(const install of installations){
             const info = InstallationManager.getInstallationInfo(install)
-            const loaderIcon = {
-                'vanilla': '🟩',
-                'forge': '🔨',
-                'fabric': '🧵',
-                'quilt': '🪡',
-                'neoforge': '⚒️'
-            }[install.loader.type] || '📦'
+            // SVG icon paths for loaders (replacing emojis)
+            const loaderIconPath = {
+                'vanilla': 'assets/images/icons/loaders/vanilla.svg',
+                'forge': 'assets/images/icons/loaders/forge.svg',
+                'fabric': 'assets/images/icons/loaders/fabric.svg',
+                'quilt': 'assets/images/icons/loaders/quilt.svg',
+                'neoforge': 'assets/images/icons/loaders/neoforge.svg'
+            }[install.loader.type] || 'assets/images/icons/loaders/unknown.svg'
             
             // Descripción
             let description = `${info.loader.toUpperCase()} ${info.loaderVersion || ''} (MC ${info.minecraftVersion})`
             
-            htmlString += `<button class="installationListing serverListing" installid="${install.id}" ${install.id === selectedInstallId ? 'selected' : ''}>
-                <div style="font-size: 32px; margin-right: 15px;">${loaderIcon}</div>
+            htmlString += `<button class="installationListing serverListing instance-card instance-card--custom" installid="${install.id}" ${install.id === selectedInstallId ? 'selected' : ''}>
+                <div class="instance-card__icon"><img src="${loaderIconPath}" alt="${install.loader.type}" class="instance-card__icon-img"></div>
                 <div class="serverListingDetails">
                     <span class="serverListingName">${install.name}</span>
                     <span class="serverListingDescription">${description}</span>
@@ -946,46 +1566,108 @@ function setupServerSelectTabs(){
     const installationList = document.getElementById('installationSelectListScrollable')
     const serverList = document.getElementById('serverSelectListScrollable')
     const createButton = document.getElementById('installationCreateButton')
+    const heroHeader = document.getElementById('tecnilandHeroHeader')
+    const mainHeader = document.getElementById('serverSelectHeader')
     
     tabInstallations.onclick = () => {
-        // Activar tab instalaciones
-        tabInstallations.style.background = 'rgba(255,255,255,0.2)'
-        tabInstallations.style.borderColor = 'rgba(255,255,255,0.4)'
-        tabInstallations.querySelector('span').style.color = 'white'
-        
-        // Desactivar tab servidores
-        tabServers.style.background = 'rgba(255,255,255,0.1)'
-        tabServers.style.borderColor = 'rgba(255,255,255,0.2)'
-        tabServers.querySelector('span').style.color = 'rgba(255,255,255,0.7)'
+        // Activar tab instalaciones usando clases BEM
+        tabInstallations.classList.add('active')
+        tabServers.classList.remove('active')
         
         // Mostrar lista de instalaciones
         installationList.style.display = 'block'
         serverList.style.display = 'none'
         createButton.style.display = 'block'
         
-        // Actualizar header con contexto
-        document.getElementById('serverSelectHeader').textContent = '🎮 Selecciona una Instalación Personalizada'
+        // Ocultar hero TECNILAND, mostrar header normal
+        heroHeader.style.display = 'none'
+        mainHeader.style.display = 'block'
+        mainHeader.innerHTML = '<img src="assets/images/icons/loaders/gamepad.svg" class="instance-selector__header-icon"> Selecciona una Instalación'
     }
     
-    tabServers.onclick = () => {
-        // Activar tab servidores
-        tabServers.style.background = 'rgba(255,255,255,0.2)'
-        tabServers.style.borderColor = 'rgba(255,255,255,0.4)'
-        tabServers.querySelector('span').style.color = 'white'
+    tabServers.onclick = async () => {
+        // Activar tab servidores usando clases BEM
+        tabServers.classList.add('active')
+        tabInstallations.classList.remove('active')
         
-        // Desactivar tab instalaciones
-        tabInstallations.style.background = 'rgba(255,255,255,0.1)'
-        tabInstallations.style.borderColor = 'rgba(255,255,255,0.2)'
-        tabInstallations.querySelector('span').style.color = 'rgba(255,255,255,0.7)'
-        
-        // Mostrar lista de servidores
+        // Mostrar lista de servidores TECNILAND
         installationList.style.display = 'none'
         serverList.style.display = 'block'
         createButton.style.display = 'none'
         
-        // Actualizar header con contexto
-        document.getElementById('serverSelectHeader').textContent = '🌐 Selecciona un Modpack TECNILAND'
+        // Mostrar hero TECNILAND, ocultar header normal
+        heroHeader.style.display = 'flex'
+        mainHeader.style.display = 'none'
+        
+        // Actualizar stats del hero
+        await updateTecnilandHeroStats()
     }
+}
+
+/**
+ * Actualizar estadísticas del Hero Header TECNILAND
+ */
+async function updateTecnilandHeroStats() {
+    try {
+        const distro = await DistroAPI.getDistribution()
+        const servers = distro.servers
+        const totalModpacks = servers.length
+        
+        // Contar instalados
+        let installedCount = 0
+        let ModpackManager = null
+        try {
+            ModpackManager = require('./assets/js/modpackmanager')
+        } catch (e) {
+            // ModpackManager no disponible, stats mostrarán 0 instalados
+        }
+        
+        if (ModpackManager) {
+            for (const serv of servers) {
+                const state = await ModpackManager.getModpackState(serv.rawServer.id)
+                if (state.isInstalled) installedCount++
+            }
+        }
+        
+        // Actualizar DOM con animación
+        const modpackCountEl = document.getElementById('heroModpackCount')
+        const installedCountEl = document.getElementById('heroInstalledCount')
+        
+        if (modpackCountEl) {
+            animateNumber(modpackCountEl, totalModpacks)
+        }
+        if (installedCountEl) {
+            animateNumber(installedCountEl, installedCount)
+        }
+    } catch (err) {
+        console.error('[Hero Stats] Error:', err)
+    }
+}
+
+/**
+ * Animar número de 0 al valor final
+ */
+function animateNumber(element, target) {
+    const duration = 600
+    const start = parseInt(element.textContent) || 0
+    const startTime = performance.now()
+    
+    function update(currentTime) {
+        const elapsed = currentTime - startTime
+        const progress = Math.min(elapsed / duration, 1)
+        
+        // Easing: ease-out cubic
+        const eased = 1 - Math.pow(1 - progress, 3)
+        const current = Math.floor(start + (target - start) * eased)
+        
+        element.textContent = current
+        
+        if (progress < 1) {
+            requestAnimationFrame(update)
+        }
+    }
+    
+    requestAnimationFrame(update)
 }
 
 // ============================================================================
@@ -1002,14 +1684,20 @@ let editingInstallationId = null  // null = crear nueva, string = editando exist
  * @param {string|null} installationId - ID de instalación para editar, o null para crear nueva
  */
 function openInstallationEditor(installationId = null){
+    const mode = installationId ? 'edit' : 'create'
+    console.log('[InstallEditor] Opening editor: mode=' + mode + ' id=' + (installationId || 'none'))
+    
+    // IMPORTANTE: Establecer editingInstallationId ANTES de cualquier otra operación
     editingInstallationId = installationId
+    
+    console.log('[InstallEditor] editingInstallationId set to: ' + (editingInstallationId || 'null'))
     
     // Ocultar selector de servidores
     document.getElementById('serverSelectContent').style.display = 'none'
     // Mostrar editor inline
     document.getElementById('installationEditorContent').style.display = 'block'
     
-    // Resetear formulario
+    // Resetear formulario (NO resetea editingInstallationId)
     resetInstallationEditorForm()
     
     // Aplicar visibilidad de loaders experimentales
@@ -1035,9 +1723,19 @@ function openInstallationEditor(installationId = null){
  * @param {Object} installation - Instalación a editar
  */
 async function loadInstallationIntoEditor(installation) {
-    // Cambiar header
+    console.log('[InstallEditor] Loading installation for editing: mode=edit id=' + installation.id + ' name="' + installation.name + '"')
+    
+    // Cambiar header - usar "Aplicar cambios" para reflejar upgrade-in-place
     document.getElementById('installationEditorHeader').textContent = '✏️ Editar Instalación'
-    document.getElementById('installationEditorCreate').textContent = '💾 Guardar Cambios'
+    document.getElementById('installationEditorCreate').textContent = '🔄 Aplicar Cambios'
+    
+    // Verificar si hay upgrade fallido pendiente
+    const failedUpgrade = InstallationManager.getFailedUpgrade(installation.id)
+    if (failedUpgrade) {
+        console.log('[InstallEditor] Found failed upgrade for id=' + installation.id + ', showing recovery dialog')
+        showFailedUpgradeRecovery(installation.id, failedUpgrade)
+        return
+    }
     
     // Cargar nombre
     document.getElementById('installationEditorName').value = installation.name
@@ -1106,9 +1804,9 @@ function resetInstallationEditorForm() {
     document.getElementById('installationEditorLoaderVersionGroup').style.display = 'none'
     document.getElementById('installationEditorErrorMessage').style.display = 'none'
     currentEditorLoader = 'vanilla'
-    editingInstallationId = null
+    // NO resetear editingInstallationId aquí - se maneja en openInstallationEditor
     
-    // Resetear header y botón
+    // Resetear header y botón (se sobrescribirá si es modo edit)
     document.getElementById('installationEditorHeader').textContent = '✨ Nueva Instalación'
     document.getElementById('installationEditorCreate').textContent = '✅ Crear Instalación'
     
@@ -1359,6 +2057,10 @@ async function createInstallationFromForm() {
     const minecraftVersion = document.getElementById('installationEditorMcVersion').value
     const loaderVersion = currentEditorLoader === 'vanilla' ? null : document.getElementById('installationEditorLoaderVersion').value
     
+    const mode = editingInstallationId ? 'edit' : 'create'
+    console.log('[InstallEditor] createInstallationFromForm called: mode=' + mode + ' id=' + (editingInstallationId || 'none') + ' name="' + name + '"')
+    console.log('[InstallEditor] editingInstallationId value check:', editingInstallationId, typeof editingInstallationId)
+    
     if(!name || !minecraftVersion) {
         showInstallationEditorError('Por favor completa todos los campos requeridos')
         return
@@ -1371,43 +2073,87 @@ async function createInstallationFromForm() {
     
     const createBtn = document.getElementById('installationEditorCreate')
     createBtn.disabled = true
-    createBtn.innerHTML = editingInstallationId ? 'Guardando...' : 'Creando instalación...'
+    createBtn.innerHTML = editingInstallationId ? 'Aplicando cambios...' : 'Creando instalación...'
     
     try {
         if (editingInstallationId) {
-            // MODO EDICIÓN: Actualizar instalación existente
+            // ============================================================
+            // MODO EDICIÓN: Usar sistema de upgrade-in-place
+            // ============================================================
+            console.log('[InstallEditor] EDIT MODE: Processing upgrade for id=' + editingInstallationId)
+            
             const existingInstall = ConfigManager.getInstallation(editingInstallationId)
             
             if (!existingInstall) {
+                console.error('[InstallEditor] ERROR: Installation not found: id=' + editingInstallationId)
                 showInstallationEditorError('No se encontró la instalación a editar')
                 createBtn.disabled = false
-                createBtn.innerHTML = '💾 Guardar Cambios'
+                createBtn.innerHTML = '🔄 Aplicar Cambios'
                 return
             }
             
-            // Actualizar campos
-            const updates = {
+            // Preparar nuevo perfil
+            const newProfile = {
                 name: name,
-                loader: {
-                    type: currentEditorLoader,
-                    minecraftVersion: minecraftVersion,
-                    loaderVersion: loaderVersion
-                }
+                loaderType: currentEditorLoader,
+                minecraftVersion: minecraftVersion,
+                loaderVersion: loaderVersion
             }
             
-            const updated = ConfigManager.updateInstallation(editingInstallationId, updates)
+            console.log('[InstallEditor] Analyzing changes:', {
+                from: {
+                    name: existingInstall.name,
+                    loader: existingInstall.loader.type,
+                    mcVersion: existingInstall.loader.minecraftVersion,
+                    loaderVersion: existingInstall.loader.loaderVersion
+                },
+                to: newProfile
+            })
             
-            if (!updated) {
-                showInstallationEditorError('No se pudo actualizar la instalación')
+            // Analizar cambios
+            const changes = InstallationManager.analyzeUpgradeChanges(existingInstall, newProfile)
+            
+            if (!changes.hasChanges) {
+                console.log('[InstallEditor] No changes detected, closing editor')
                 createBtn.disabled = false
-                createBtn.innerHTML = '💾 Guardar Cambios'
+                createBtn.innerHTML = '🔄 Aplicar Cambios'
+                closeInstallationEditor()
+                await prepareServerSelectionList()
                 return
             }
             
-            ConfigManager.save()
-            console.log(`[Installation] Instalación actualizada: ${name}`)
+            console.log('[InstallEditor] Changes detected:', changes.summary)
+            
+            // Si hay cambios significativos, mostrar diálogo de confirmación
+            if (changes.mcVersionChanged || changes.loaderTypeChanged) {
+                console.log('[InstallEditor] Significant changes detected, showing confirmation overlay')
+                createBtn.disabled = false
+                createBtn.innerHTML = '🔄 Aplicar Cambios'
+                
+                // Mostrar overlay de confirmación
+                showUpgradeConfirmationOverlay(editingInstallationId, existingInstall, newProfile, changes)
+                return
+            }
+            
+            // Cambios menores (solo nombre o versión de loader): aplicar directamente
+            console.log('[InstallEditor] Minor changes, applying upgrade directly without confirmation')
+            const result = await InstallationManager.upgradeInstanceInPlace(editingInstallationId, newProfile)
+            
+            if (!result.success) {
+                console.error('[InstallEditor] Upgrade failed:', result.error)
+                showInstallationEditorError('Error: ' + result.error)
+                createBtn.disabled = false
+                createBtn.innerHTML = '🔄 Aplicar Cambios'
+                return
+            }
+            
+            console.log('[InstallEditor] ✅ Upgrade successful for id=' + editingInstallationId)
             
         } else {
+            // ============================================================
+            // MODO CREACIÓN: Crear nueva instalación
+            // ============================================================
+            console.log('[InstallEditor] CREATE MODE: Creating new installation name="' + name + '"')
             // MODO CREACIÓN: Crear nueva instalación
             const installation = InstallationManager.createInstallation({
                 name,
@@ -1426,6 +2172,7 @@ async function createInstallationFromForm() {
             
             const added = ConfigManager.addInstallation(installation)
             if(!added) {
+                console.error('[InstallEditor] Failed to add installation: name="' + name + '"')
                 showInstallationEditorError('No se pudo agregar la instalación. Ya existe una con el mismo nombre.')
                 createBtn.disabled = false
                 createBtn.innerHTML = '✅ Crear Instalación'
@@ -1433,10 +2180,11 @@ async function createInstallationFromForm() {
             }
             
             ConfigManager.save()
-            console.log(`[Installation] Nueva instalación creada: ${name}`)
+            console.log('[InstallEditor] ✅ New installation created: id=' + installation.id + ' name="' + name + '"')
         }
         
         // Cerrar editor y volver al selector
+        console.log('[InstallEditor] Closing editor and refreshing installation list')
         closeInstallationEditor()
         
         // Refrescar lista

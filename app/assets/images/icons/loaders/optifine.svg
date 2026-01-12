@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <!-- OptiFine - Lightning/Performance Icon -->
+  <defs>
+    <linearGradient id="optifineGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFD700"/>
+      <stop offset="50%" style="stop-color:#FFC107"/>
+      <stop offset="100%" style="stop-color:#FF9800"/>
+    </linearGradient>
+    <filter id="optifineGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="1" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <!-- Lightning Bolt -->
+  <polygon points="13,2 6,14 11,14 9,22 18,10 13,10 15,2" fill="url(#optifineGrad)" filter="url(#optifineGlow)"/>
+  <!-- Inner Highlight -->
+  <polygon points="12,5 8,12 10.5,12 9.5,18 15,11 12.5,11 13.5,5" fill="#FFEB3B" opacity="0.6"/>
+</svg>

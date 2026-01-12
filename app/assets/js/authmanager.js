@@ -223,6 +223,15 @@ async function fullMicrosoftAuthFlow(entryCode, authMode) {
         }
     } catch(err) {
         log.error(err)
+        
+        // Check if it's a rate limit error (HTTP 429)
+        if (err.response && err.response.statusCode === 429) {
+            return Promise.reject({
+                title: Lang.queryJS('auth.microsoft.error.rateLimitTitle'),
+                desc: Lang.queryJS('auth.microsoft.error.rateLimitDesc')
+            })
+        }
+        
         return Promise.reject(microsoftErrorDisplayable(MicrosoftErrorCode.UNKNOWN))
     }
 }

@@ -1,0 +1,95 @@
+{
+  "version": "1.0.0",
+  "discord": {
+    "clientId": "TU_APPLICATION_ID_AQUI",
+    "smallImageKey": "tecniland-logo",
+    "smallImageText": "TECNILAND Nexus v2.0"
+  },
+  "rss": "https://tu-sitio.com/news.rss",
+  "servers": [
+    {
+      "id": "tecniland-main",
+      "name": "TECNILAND Main Server",
+      "description": "Servidor principal con mods custom de supervivencia y aventura",
+      "icon": "https://r2.tecniland.com/servers/main/icon.png",
+      "version": "1.0.0",
+      "address": "mc.tecniland.com",
+      "minecraftVersion": "1.20.1",
+      "discord": {
+        "shortId": "Main",
+        "largeImageKey": "server-tecniland-main",
+        "largeImageText": "TECNILAND Main Server - Survival"
+      },
+      "mainServer": true,
+      "autoconnect": true,
+      "modules": [
+        {
+          "id": "net.minecraftforge:forge:1.20.1-47.3.0",
+          "name": "Minecraft Forge",
+          "type": "ForgeHosted",
+          "artifact": {
+            "size": 5234567,
+            "MD5": "abc123...",
+            "url": "https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.3.0/forge-1.20.1-47.3.0-installer.jar"
+          }
+        }
+      ]
+    },
+    {
+      "id": "tecniland-skyblock",
+      "name": "TECNILAND Skyblock",
+      "description": "Skyblock con economía, tiendas y mods tecnológicos",
+      "icon": "https://r2.tecniland.com/servers/skyblock/icon.png",
+      "version": "1.0.0",
+      "address": "skyblock.tecniland.com",
+      "minecraftVersion": "1.20.1",
+      "discord": {
+        "shortId": "Skyblock",
+        "largeImageKey": "server-skyblock",
+        "largeImageText": "TECNILAND Skyblock - Economy & Tech"
+      },
+      "mainServer": false,
+      "autoconnect": false,
+      "modules": [
+        {
+          "id": "net.minecraftforge:forge:1.20.1-47.3.0",
+          "name": "Minecraft Forge",
+          "type": "ForgeHosted",
+          "artifact": {
+            "size": 5234567,
+            "MD5": "abc123...",
+            "url": "https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.3.0/forge-1.20.1-47.3.0-installer.jar"
+          }
+        }
+      ]
+    },
+    {
+      "id": "tecniland-creative",
+      "name": "TECNILAND Creative",
+      "description": "Servidor creativo para builders y constructores",
+      "icon": "https://r2.tecniland.com/servers/creative/icon.png",
+      "version": "1.0.0",
+      "address": "creative.tecniland.com",
+      "minecraftVersion": "1.20.1",
+      "discord": {
+        "shortId": "Creative",
+        "largeImageKey": "server-creative",
+        "largeImageText": "TECNILAND Creative - Building"
+      },
+      "mainServer": false,
+      "autoconnect": false,
+      "modules": [
+        {
+          "id": "net.minecraftforge:forge:1.20.1-47.3.0",
+          "name": "Minecraft Forge",
+          "type": "ForgeHosted",
+          "artifact": {
+            "size": 5234567,
+            "MD5": "abc123...",
+            "url": "https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.3.0/forge-1.20.1-47.3.0-installer.jar"
+          }
+        }
+      ]
+    }
+  ]
+}

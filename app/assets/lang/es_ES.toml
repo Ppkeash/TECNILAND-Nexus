@@ -150,8 +150,8 @@ waitingText = "Esperando a Microsoft..."
 continueButton = "CONTINUAR"
 
 [js.discord]
-waiting = "Esperando al Cliente.."
-state = "Servidor: {shortId}"
+waiting = "En el menú principal"
+state = "Contemplando el {shortId}"
 
 [js.index]
 microsoftLoginTitle = "Inicio de Sesión Microsoft"
@@ -272,9 +272,9 @@ maintenanceContent = """<div style="font-family: 'Segoe UI', Arial, sans-serif; 
 </div>"""
 
 [js.landing.discord]
-loading = "Cargando juego.."
-joining = "¡Navegando a Westeros!"
-joined = "¡Explorando el Reino!"
+loading = "Preparando el juego..."
+joining = "Conectando al servidor..."
+joined = "Explorando el mundo 🌍"
 
 [js.overlay]
 dismiss = "Descartar"
@@ -383,6 +383,8 @@ xblBannedTitle = "Error Durante el Inicio de Sesión:<br>Xbox Live No Disponible
 xblBannedDesc = "Tu cuenta Microsoft es de un país donde Xbox Live no está disponible o está prohibido."
 under18Title = "Error Durante el Inicio de Sesión:<br>Requiere Aprobación de los Padres"
 under18Desc = "Las cuentas de usuarios menores de 18 años deben ser añadidas a una Familia por un adulto."
+rateLimitTitle = "Error Durante el Inicio de Sesión:<br>Demasiados Intentos"
+rateLimitDesc = "Has intentado iniciar sesión demasiadas veces en poco tiempo. Microsoft ha bloqueado temporalmente las solicitudes de autenticación.<br><br>Por favor, <strong>espera entre 5 y 15 minutos</strong> antes de intentar nuevamente. Si el problema persiste, espera más tiempo o reinicia tu router para obtener una nueva IP."
 unknownTitle = "Error Desconocido Durante el Inicio de Sesión"
 unknownDesc = "Ocurrió un error desconocido. Por favor, consulta la consola para más detalles."
 

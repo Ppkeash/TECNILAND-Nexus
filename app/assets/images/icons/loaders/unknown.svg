@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <!-- Unknown/Package - Fallback Icon -->
+  <defs>
+    <linearGradient id="unknownGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#78909C"/>
+      <stop offset="100%" style="stop-color:#546E7A"/>
+    </linearGradient>
+  </defs>
+  <!-- Box -->
+  <path d="M12 2 L22 7 L22 17 L12 22 L2 17 L2 7 Z" fill="url(#unknownGrad)" stroke="#90A4AE" stroke-width="1"/>
+  <!-- Top Face -->
+  <path d="M12 2 L22 7 L12 12 L2 7 Z" fill="#90A4AE"/>
+  <!-- Center Line -->
+  <path d="M12 12 L12 22" stroke="#607D8B" stroke-width="1.5"/>
+  <!-- Question Mark -->
+  <text x="12" y="16" font-family="Arial, sans-serif" font-size="8" font-weight="bold" fill="white" text-anchor="middle">?</text>
+</svg>
