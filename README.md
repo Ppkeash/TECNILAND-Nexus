@@ -32,7 +32,7 @@
 
 - ✅ **Soporte Forge estable:** Minecraft 1.13 → 1.21.x completamente funcional.
 - ✅ **Gestión automática de Java:** detección inteligente + descarga automática.
-- ✅ **Cuentas Offline:** jugar sin Microsoft Account, con soporte de skins locales.
+- ✅ **Cuentas Offline:** jugar sin Microsoft Account (skins in-game próximamente con Cuenta TECNILAND).
 - ✅ **Diagnóstico en tiempo real:** Live Log Viewer con exportación a archivo.
 - ✅ **OptiFine integrado:** flujo especial para instalación y detección.
 - ✅ **Modpacks TECNILAND:** sistema de distribución basado en Nebula + Cloudflare R2.
@@ -162,9 +162,11 @@ Soporte completo de cuentas locales sin Microsoft Account.
 **Características:**
 - Crear cuentas locales con cualquier nombre.
 - Persistencia: las cuentas se guardan en configuración del launcher.
-- Skins locales cargables (almacenados localmente en formato PNG).
+- Editor de skins integrado con preview en el launcher.
 - Soporte para UUID generado localmente (compatible con Minecraft offline).
 - Cambiar de cuenta sin reiniciar el launcher.
+
+> ⚠️ **Nota sobre skins:** El editor de skins actual permite seleccionar y previsualizar skins en el launcher, pero **las skins NO se muestran dentro de Minecraft** todavía. Para que las skins personalizadas funcionen in-game se requiere un servidor de autenticación tipo Yggdrasil (similar a SKlauncher). Esta funcionalidad llegará con **Cuenta TECNILAND** en una futura actualización.
 
 **Ejemplo de flujo:**
 ```
@@ -176,7 +178,7 @@ Inicio de sesión Offline:
 Launcher crea carpeta con datos de cuenta:
 - UUID local
 - Datos de perfil
-- Skin (si la cargaste)
+- Skin (preview en launcher, no in-game aún)
 ↓
 Ahora ese nombre aparece en "Cuentas" para sesiones futuras
 ```
@@ -547,7 +549,7 @@ Estas son las mejoras que convierten el sistema en "producto profesional":
 |--------|---------|--------|-------|-----------|
 | **Core** | Forge 1.13–1.21.x | ✅ Hecho | Pipeline completo | - |
 | **Core** | JavaManager automático | ✅ Hecho | Detecta + descarga | - |
-| **Core** | Cuentas Offline | ✅ Hecho | Persistencia + skins | - |
+| **Core** | Cuentas Offline | ✅ Hecho | Persistencia + preview skins (in-game próximamente) | - |
 | **Core** | Live Log Viewer | ✅ Hecho | Logs + exportar | - |
 | **Core** | Gestor instalaciones | ✅ Hecho | Crear/editar/eliminar | - |
 | **Loaders** | Fabric | 🟡 Experimental | Detrás de toggle | Baja |

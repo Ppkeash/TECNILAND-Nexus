@@ -2817,7 +2817,7 @@ function populateAboutVersionInformation(){
  */
 function populateReleaseNotes(){
     $.ajax({
-        url: 'https://github.com/dscalzi/HeliosLauncher/releases.atom',
+        url: 'https://github.com/Ppkeash/TECNILAND-Nexus/releases.atom',
         success: (data) => {
             const version = 'v' + remote.app.getVersion()
             const entries = $(data).find('entry')
@@ -2893,6 +2893,48 @@ function settingsUpdateButtonStatus(text, disabled = false, handler = null){
     if(handler != null){
         settingsUpdateActionButton.onclick = handler
     }
+}
+
+/**
+ * Show a temporary message when no updates are available
+ */
+function showNoUpdatesMessage(){
+    if (!settingsUpdateTitle || !settingsUpdateChangelogCont) return
+    
+    // Actualizar título
+    settingsUpdateTitle.innerHTML = Lang.queryJS('uicore.autoUpdate.noUpdatesAvailableTitle')
+    
+    // Mostrar mensaje en el área de changelog
+    const originalChangelogDisplay = settingsUpdateChangelogCont.style.display
+    settingsUpdateChangelogCont.style.display = null
+    
+    const changelogTitle = settingsUpdateChangelogCont.querySelector('.settingsChangelogTitle')
+    const changelogText = settingsUpdateChangelogCont.querySelector('.settingsChangelogText')
+    
+    if (changelogTitle) {
+        changelogTitle.innerHTML = '✅ ' + Lang.queryJS('uicore.autoUpdate.noUpdatesAvailableTitle')
+        changelogTitle.style.color = '#4CAF50'
+    }
+    if (changelogText) {
+        changelogText.innerHTML = Lang.queryJS('uicore.autoUpdate.noUpdatesAvailableDesc')
+        changelogText.style.color = '#a0a0a0'
+    }
+    
+    // Ocultar mensaje después de 5 segundos
+    setTimeout(() => {
+        if (settingsUpdateTitle) {
+            settingsUpdateTitle.innerHTML = Lang.queryJS('settings.updates.latestVersionTitle')
+        }
+        if (settingsUpdateChangelogCont) {
+            settingsUpdateChangelogCont.style.display = 'none'
+        }
+        if (changelogTitle) {
+            changelogTitle.style.color = ''
+        }
+        if (changelogText) {
+            changelogText.style.color = ''
+        }
+    }, 5000)
 }
 
 /**

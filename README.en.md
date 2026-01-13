@@ -29,7 +29,7 @@ We envision more than just a simple launcher: we're building an **ecosystem** wh
 - ✅ **Automatic JavaManager:** Intelligent Java version management for each installation.
 - ✅ **Live Log Viewer:** Real-time logs panel with TECNILAND green/black aesthetic.
 - ✅ **TECNILAND Modpacks:** Pre-configured installations ready to play.
-- ✅ **Offline Accounts:** Full support for accounts without Microsoft.
+- ✅ **Offline Accounts:** Full support for accounts without Microsoft (skins in-game coming with TECNILAND Account).
 
 > 🚧 **IMPORTANT WARNING:** NeoForge 1.20.4 is in maintenance mode due to critical instability (frequent JPMS crashes, requires Java 17 exactly, complex workarounds). **We recommend using stable Forge (1.20.1/1.20.6).** If you attempt to use NeoForge, the launcher will require confirmation on every launch.
 
@@ -45,7 +45,7 @@ We've thoroughly tested all Forge versions from Minecraft 1.13 to 1.21.x. Here a
 
 | MC Version | Status | Details |
 |-----------|--------|---------|
-| 1.13.x    | ✅ OK  | Functional, offline accounts supported |
+| 1.13.x    | ✅ OK  | Functional, offline accounts (skins in-game TBA) |
 | 1.14.x    | ✅ OK  | Full support |
 | 1.15.2    | ✅ OK  | Fixed: Log4j2 conflict resolution |
 | 1.16.x    | ✅ OK  | All variants (1.16.0-1.16.5) functional |
@@ -81,6 +81,7 @@ We've thoroughly tested all Forge versions from Minecraft 1.13 to 1.21.x. Here a
   - Create local accounts with any username.
   - Persistence in launcher configuration.
   - Loadable local skins (stored locally).
+  - ⚠️ **Note:** Skins are currently only visible in the launcher preview. For skins to work in-game, a Yggdrasil authentication system is needed, which will come with **TECNILAND Account** (Fase 1).
 
 - **Native Live Log Viewer** - Integrated logs panel:
   - Real-time capture of Minecraft stdout/stderr.

@@ -1,6 +1,6 @@
 {
   "name": "tecniland-nexus",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "productName": "TECNILAND Nexus",
   "description": "Launcher personalizado para TECNILAND",
   "author": "TECNILAND by Ppkeash",
@@ -47,6 +47,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dscalzi/HeliosLauncher.git"
+    "url": "git+https://github.com/Ppkeash/TECNILAND-Nexus.git"
   }
 }

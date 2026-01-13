@@ -49,7 +49,7 @@ if(!isDev){
                 loggerAutoUpdater.info('New update available', info.version)
                 
                 if(process.platform === 'darwin'){
-                    info.darwindownload = `https://github.com/dscalzi/HeliosLauncher/releases/download/v${info.version}/Helios-Launcher-setup-${info.version}${process.arch === 'arm64' ? '-arm64' : '-x64'}.dmg`
+                    info.darwindownload = `https://github.com/Ppkeash/TECNILAND-Nexus/releases/download/v${info.version}/TECNILAND-Nexus-setup-${info.version}${process.arch === 'arm64' ? '-arm64' : '-x64'}.dmg`
                     showUpdateUI(info)
                 }
                 
@@ -67,6 +67,8 @@ if(!isDev){
             case 'update-not-available':
                 loggerAutoUpdater.info('No new update found.')
                 settingsUpdateButtonStatus(Lang.queryJS('uicore.autoUpdate.checkForUpdatesButton'))
+                // Mostrar mensaje temporal de que está actualizado
+                showNoUpdatesMessage()
                 break
             case 'ready':
                 updateCheckListener = setInterval(() => {

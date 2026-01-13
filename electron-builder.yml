@@ -2,7 +2,7 @@ appId: tecniland.nexus
 productName: 'TECNILAND Nexus'
 artifactName: '${productName}-setup-${version}.${ext}'
 
-copyright: 'Copyright © 2018-2024 Daniel Scalzi'
+copyright: 'Copyright © 2024-2026 TECNILAND (Ppkeash). Based on HeliosLauncher by Daniel Scalzi.'
 
 asar: true
 compression: 'maximum'
@@ -43,12 +43,18 @@ mac:
 # Linux Configuration
 linux: 
   target: 'AppImage'
-  maintainer: 'Daniel Scalzi'
-  vendor: 'Daniel Scalzi'
-  synopsis: 'Modded Minecraft Launcher'
-  description: 'Custom launcher which allows users to join modded servers. All mods, configurations, and updates are handled automatically.'
+  maintainer: 'Ppkeash'
+  vendor: 'TECNILAND'
+  synopsis: 'TECNILAND Nexus - Minecraft Launcher'
+  description: 'Custom launcher for TECNILAND community. Automatic modpack updates, Java management, and seamless gaming experience.'
   category: 'Game'
 
+# Auto-Update Configuration
+publish:
+  provider: github
+  owner: Ppkeash
+  repo: TECNILAND-Nexus
+  releaseType: release
 
 directories:
   buildResources: 'build'

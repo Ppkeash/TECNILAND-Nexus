@@ -511,6 +511,12 @@ class ProcessBuilder {
         const result = []
         
         for (const arg of args) {
+            // Skip invalid args (not string or empty)
+            if (typeof arg !== 'string' || !arg.trim()) {
+                logger.warn(`Invalid JVM arg detected (type: ${typeof arg}): ${JSON.stringify(arg)} - skipping`)
+                continue
+            }
+            
             // Extract key: -Dkey=value → -Dkey, -Xmx4G → -Xmx4G
             const key = arg.includes('=') ? arg.split('=')[0] : arg.split(/\s+/)[0]
             

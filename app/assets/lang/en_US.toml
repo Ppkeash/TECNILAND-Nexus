@@ -369,6 +369,8 @@ selectAnotherAccountButton = "Select Another Account"
 checkingForUpdateButton = "Checking for Updates..."
 installNowButton = "Install Now"
 checkForUpdatesButton = "Check for Updates"
+noUpdatesAvailableTitle = "You're Up to Date"
+noUpdatesAvailableDesc = "You're using the latest version of TECNILAND Nexus."
 
 [js.auth.microsoft.error]
 noProfileTitle = "Error During Login:<br>Profile Not Set Up"
