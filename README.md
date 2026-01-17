@@ -41,7 +41,7 @@
 
 > 🚧 **ADVERTENCIA IMPORTANTE:** NeoForge 1.20.4 está en modo mantenimiento debido a inestabilidad crítica (crashes frecuentes con JPMS, requiere Java 17 exacto, workarounds complejos). **Recomendamos usar Forge estable (1.20.1/1.20.6).** Si intentas usar NeoForge, el launcher te pedirá confirmación en cada lanzamiento.
 
-Estado: **Beta 0.x.x** (funcional, en desarrollo activo).
+Estado: **v1.0.6** (estable, en desarrollo activo).
 
 ---
 
@@ -87,10 +87,26 @@ Hemos probado exhaustivamente todas las versiones desde 1.13 hasta 1.21.x. Aquí
 | 1.17.1    | ✅ OK  | Soporte completo | Java 16-17 |
 | 1.18.2    | ✅ OK  | Versión estable muy utilizada | Java 17 |
 | 1.19.4    | ✅ OK  | Arreglado: Classpath deduplication | Java 17 |
-| 1.20.1    | ✅ OK  | **Soporte completo, muy estable** | Java 17 |
+| 1.20.1    | ✅ OK  | **Fix v1.0.6:** JVM args procesados correctamente | Java 17 |
 | 1.21.x    | ✅ OK  | Arreglado: Forge universal + client JAR handling | Java 17-21 |
 
 **Nota:** El JavaManager automático del launcher elige la versión correcta. No tienes que hacer nada.
+
+### 🆕 Últimos cambios (v1.0.6 - Enero 2026)
+
+#### ✅ Fix Crítico: Forge 1.20.1 JVM Arguments
+- **Problema resuelto:** Error `--add-opens requires modules to be specified` al lanzar Forge 1.20.1
+- **Causa:** Procesamiento incorrecto de argumentos JVM en formato flat array (flags duplicados sin valores)
+- **Solución:** Nueva función `_processForgeJvmArgs()` que maneja correctamente pares flag+valor + guard-rail de validación pre-spawn
+
+#### ✅ Sistema de Auto-Updates Completamente Funcional
+- **Problema resuelto:** Descarga de actualizaciones estancada sin progreso visible
+- **Solución:** Refactorización completa con `autoUpdaterWebContents` global + logging exhaustivo
+- **Nuevas características:**
+  - Barra de progreso con porcentaje, velocidad y tamaño en tiempo real
+  - Botón "Descargar Actualización" con feedback visual inmediato
+  - Manejo robusto de errores con opción de reintento automático
+  - Logging detallado en main process y renderer para debugging
 
 ---
 

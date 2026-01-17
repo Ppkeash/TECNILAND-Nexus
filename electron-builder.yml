@@ -1,6 +1,6 @@
 appId: tecniland.nexus
 productName: 'TECNILAND Nexus'
-artifactName: '${productName}-setup-${version}.${ext}'
+artifactName: 'TECNILAND-Nexus-setup-${version}.${ext}'
 
 copyright: 'Copyright © 2024-2026 TECNILAND (Ppkeash). Based on HeliosLauncher by Daniel Scalzi.'
 

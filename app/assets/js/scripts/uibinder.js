@@ -62,6 +62,33 @@ function getCurrentView(){
 }
 
 /**
+ * ✅ Safe wrapper para updateSelectedServer
+ * Esta función está definida en landing.js y expuesta a window.
+ * Este wrapper previene errores si se llama antes de que landing.js haya cargado.
+ * 
+ * @param {Object} server - El servidor a seleccionar
+ */
+function safeUpdateSelectedServer(server) {
+    if (typeof updateSelectedServer === 'function') {
+        updateSelectedServer(server)
+    } else if (typeof window !== 'undefined' && typeof window.updateSelectedServer === 'function') {
+        window.updateSelectedServer(server)
+    } else {
+        console.warn('[UIBinder] updateSelectedServer no está disponible aún, defer para DOMContentLoaded')
+        // Defer la llamada hasta que el DOM esté listo
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof updateSelectedServer === 'function') {
+                updateSelectedServer(server)
+            } else if (typeof window !== 'undefined' && typeof window.updateSelectedServer === 'function') {
+                window.updateSelectedServer(server)
+            } else {
+                console.error('[UIBinder] updateSelectedServer nunca estuvo disponible')
+            }
+        }, { once: true })
+    }
+}
+
+/**
  * Restaurar la selección de servidor/instalación/auto-profile al iniciar
  * 
  * @param {Object} data - Distribution index data
@@ -79,7 +106,7 @@ async function restoreSelectedServerOrInstallation(data) {
         
         if (autoProfile) {
             const virtualServer = InstallationManager.autoProfileToServer(autoProfile)
-            updateSelectedServer({ rawServer: virtualServer })
+            safeUpdateSelectedServer({ rawServer: virtualServer })
             console.log(`[UIBinder] Restaurado auto-profile: ${autoProfile.name}`)
             return
         } else {
@@ -96,7 +123,7 @@ async function restoreSelectedServerOrInstallation(data) {
         
         if (installation) {
             const virtualServer = InstallationManager.installationToServer(installation)
-            updateSelectedServer({ rawServer: virtualServer })
+            safeUpdateSelectedServer({ rawServer: virtualServer })
             console.log(`[UIBinder] Restaurada instalación personalizada: ${installation.name}`)
             return
         } else {
@@ -111,7 +138,7 @@ async function restoreSelectedServerOrInstallation(data) {
     if (selectedServerId) {
         const server = data.getServerById(selectedServerId)
         if (server) {
-            updateSelectedServer(server)
+            safeUpdateSelectedServer(server)
             console.log(`[UIBinder] Restaurado servidor TECNILAND: ${server.rawServer.name}`)
             return
         }
@@ -123,11 +150,11 @@ async function restoreSelectedServerOrInstallation(data) {
         ConfigManager.setSelectedServer(firstServer.rawServer.id)
         ConfigManager.setSelectedInstallation(null)
         ConfigManager.save()
-        updateSelectedServer(firstServer)
+        safeUpdateSelectedServer(firstServer)
         console.log(`[UIBinder] Seleccionado servidor por defecto: ${firstServer.rawServer.name}`)
     } else {
         console.warn('[UIBinder] No hay servidores disponibles en la distribución')
-        updateSelectedServer(null)
+        safeUpdateSelectedServer(null)
     }
 }
 
@@ -587,6 +614,6 @@ async function devModeToggle() {
     DistroAPI.toggleDevMode(true)
     const data = await DistroAPI.refreshDistributionOrFallback()
     ensureJavaSettings(data)
-    updateSelectedServer(data.servers[0])
+    safeUpdateSelectedServer(data.servers[0])
     syncModConfigurations(data)
 }

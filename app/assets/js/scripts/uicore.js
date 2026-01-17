@@ -40,23 +40,35 @@ webFrame.setVisualZoomLevelLimits(1, 1)
 let updateCheckListener
 if(!isDev){
     ipcRenderer.on('autoUpdateNotification', (event, arg, info) => {
+        // Log exhaustivo para debugging
+        loggerAutoUpdater.info(`[IPC] Recibido: "${arg}"`, info ? JSON.stringify(info).substring(0, 200) : '')
+        
         switch(arg){
             case 'checking-for-update':
-                loggerAutoUpdater.info('Checking for update..')
+                loggerAutoUpdater.info('Verificando actualizaciones...')
                 settingsUpdateButtonStatus(Lang.queryJS('uicore.autoUpdate.checkingForUpdateButton'), true)
                 break
             case 'update-available':
-                loggerAutoUpdater.info('New update available', info.version)
+                loggerAutoUpdater.info(`Nueva actualización disponible: ${info.version}`)
+                console.log('[AutoUpdater] update-available info:', info)
                 
                 if(process.platform === 'darwin'){
                     info.darwindownload = `https://github.com/Ppkeash/TECNILAND-Nexus/releases/download/v${info.version}/TECNILAND-Nexus-setup-${info.version}${process.arch === 'arm64' ? '-arm64' : '-x64'}.dmg`
                     showUpdateUI(info)
                 }
                 
-                populateSettingsUpdateInformation(info)
+                // Verificar que la función existe antes de llamarla
+                if (typeof populateSettingsUpdateInformation === 'function') {
+                    populateSettingsUpdateInformation(info)
+                } else {
+                    console.error('[AutoUpdater] populateSettingsUpdateInformation no está definida!')
+                    // Fallback: guardar info para cuando esté lista
+                    window.pendingUpdateInfo = info
+                }
                 break
             case 'update-downloaded':
-                loggerAutoUpdater.info('Update ' + info.version + ' ready to be installed.')
+                loggerAutoUpdater.info(`Actualización ${info.version} lista para instalar`)
+                showDownloadProgressBar(false) // Ocultar barra de progreso
                 settingsUpdateButtonStatus(Lang.queryJS('uicore.autoUpdate.installNowButton'), false, () => {
                     if(!isDev){
                         ipcRenderer.send('autoUpdateAction', 'installUpdateNow')
@@ -65,31 +77,41 @@ if(!isDev){
                 showUpdateUI(info)
                 break
             case 'update-not-available':
-                loggerAutoUpdater.info('No new update found.')
+                loggerAutoUpdater.info('No hay actualizaciones disponibles')
                 settingsUpdateButtonStatus(Lang.queryJS('uicore.autoUpdate.checkForUpdatesButton'))
-                // Mostrar mensaje temporal de que está actualizado
                 showNoUpdatesMessage()
                 break
             case 'ready':
+                loggerAutoUpdater.info('AutoUpdater listo')
                 updateCheckListener = setInterval(() => {
                     ipcRenderer.send('autoUpdateAction', 'checkForUpdate')
                 }, 1800000)
                 ipcRenderer.send('autoUpdateAction', 'checkForUpdate')
                 break
+            case 'download-progress':
+                // Progreso de descarga
+                loggerAutoUpdater.info(`Progreso descarga: ${info.percent ? info.percent.toFixed(1) : 0}%`)
+                updateDownloadProgress(info)
+                break
             case 'realerror':
+                loggerAutoUpdater.error('Error de AutoUpdater:', info)
                 if(info != null && info.code != null){
                     if(info.code === 'ERR_UPDATER_INVALID_RELEASE_FEED'){
-                        loggerAutoUpdater.info('No suitable releases found.')
+                        loggerAutoUpdater.info('No se encontraron releases válidos')
                     } else if(info.code === 'ERR_XML_MISSED_ELEMENT'){
-                        loggerAutoUpdater.info('No releases found.')
+                        loggerAutoUpdater.info('No se encontraron releases')
                     } else {
-                        loggerAutoUpdater.error('Error during update check..', info)
-                        loggerAutoUpdater.debug('Error Code:', info.code)
+                        loggerAutoUpdater.error(`Error Code: ${info.code}, Message: ${info.message}`)
                     }
                 }
+                // Mostrar error en UI y permitir reintento
+                showDownloadProgressBar(false)
+                settingsUpdateButtonStatus(Lang.queryJS('uicore.autoUpdate.checkForUpdatesButton'), false, () => {
+                    ipcRenderer.send('autoUpdateAction', 'checkForUpdate')
+                })
                 break
             default:
-                loggerAutoUpdater.info('Unknown argument', arg)
+                loggerAutoUpdater.warn('Argumento desconocido:', arg)
                 break
         }
     })

@@ -109,7 +109,7 @@ class ProcessBuilder {
                 const moduleId = mdl.id || ''
                 const isFabric = moduleType === Type.Fabric || moduleType === 'FabricMod' || moduleId.startsWith('net.fabricmc:fabric-loader:')
                 if (isFabric) {
-                    logger.info(`Detected Fabric loader module: type=${moduleType}, id=${mdl.id || 'unknown'}`)
+                    logger.debug(`Detected Fabric loader module: type=${moduleType}, id=${mdl.id || 'unknown'}`)
                 }
                 return isFabric
             })
@@ -124,7 +124,7 @@ class ProcessBuilder {
                 const moduleId = mdl.id || ''
                 const isQuilt = moduleType === 'QuiltMod' || moduleId.startsWith('org.quiltmc:quilt-loader:')
                 if (isQuilt) {
-                    logger.info(`Detected Quilt loader module: type=${moduleType}, id=${mdl.id || 'unknown'}`)
+                    logger.debug(`Detected Quilt loader module: type=${moduleType}, id=${mdl.id || 'unknown'}`)
                 }
                 return isQuilt
             })
@@ -139,7 +139,7 @@ class ProcessBuilder {
                 const moduleId = mdl.id || ''
                 const isNeoForge = moduleType === 'NeoForgeMod' || moduleId.startsWith('net.neoforged:neoforge:')
                 if (isNeoForge) {
-                    logger.info(`Detected NeoForge loader module: type=${moduleType}, id=${mdl.id || 'unknown'}`)
+                    logger.debug(`Detected NeoForge loader module: type=${moduleType}, id=${mdl.id || 'unknown'}`)
                 }
                 return isNeoForge
             })
@@ -269,18 +269,14 @@ class ProcessBuilder {
         logger.info(`Launching Minecraft ${mcVersion} (requires Java ${javaReqs.min}-${javaReqs.max}, recommended: ${javaReqs.recommended})`)
         logger.info(`Using Java executable: ${javaExecutable}`)
         
-        // 🔍 DEBUG: Log NeoForge detection state
-        logger.info('=== NEOFORGE DETECTION DEBUG ===')
-        logger.info(`  usingNeoForgeLoader: ${this.usingNeoForgeLoader}`)
-        logger.info(`  gameDir: ${this.gameDir}`)
-        logger.info(`  Modules count: ${this.server.modules ? this.server.modules.length : 0}`)
-        if (this.server.modules && this.server.modules.length > 0) {
-            this.server.modules.forEach((mdl, idx) => {
-                const moduleType = mdl.rawModule ? mdl.rawModule.type : mdl.type
-                logger.info(`    Module ${idx}: type=${moduleType}, id=${mdl.id || 'unknown'}`)
-            })
+        // Log loader detection (condensado)
+        if (this.usingNeoForgeLoader || this.usingFabricLoader || this.usingQuiltLoader) {
+            const loaders = []
+            if (this.usingNeoForgeLoader) loaders.push('NeoForge')
+            if (this.usingFabricLoader) loaders.push('Fabric')
+            if (this.usingQuiltLoader) loaders.push('Quilt')
+            logger.info(`Mod loaders detected: ${loaders.join(', ')}`)
         }
-        logger.info('================================')
         
         // ✅ NEOFORGE: Ensure fml.toml exists with earlyWindowControl=false
         if (this.usingNeoForgeLoader) {
@@ -356,6 +352,80 @@ class ProcessBuilder {
             }
             logger.info('========================================')
         }
+
+        // ✅ CRITICAL VALIDATION v1.0.5: Detect and fix orphaned paired flags before spawn
+        // This guard-rail prevents "--add-opens requires modules" Java errors
+        const pairedFlagsToValidate = ['--add-opens', '--add-exports', '--add-reads', '--add-modules']
+        const orphanedFlags = []
+        
+        for (let i = 0; i < args.length; i++) {
+            const arg = args[i]
+            if (typeof arg === 'string' && pairedFlagsToValidate.includes(arg)) {
+                const nextArg = args[i + 1]
+                // Check if next arg is missing, not a string, or is another flag
+                if (!nextArg || typeof nextArg !== 'string' || nextArg.startsWith('-')) {
+                    orphanedFlags.push({ index: i, flag: arg, nextArg: nextArg })
+                }
+            }
+        }
+        
+        if (orphanedFlags.length > 0) {
+            logger.error('=== ❌ CRITICAL: ORPHANED JVM FLAGS DETECTED ===')
+            logger.error('The following paired flags have no valid value:')
+            for (const orphan of orphanedFlags) {
+                logger.error(`  [${orphan.index}] "${orphan.flag}" → next: ${JSON.stringify(orphan.nextArg)}`)
+            }
+            logger.error('')
+            logger.error('This would cause Java to fail with:')
+            logger.error('  "Error: --add-opens requires modules to be specified"')
+            logger.error('')
+            logger.error('FIXING: Removing orphaned flags from args array...')
+            
+            // Remove orphaned flags (iterate backwards to avoid index shifting)
+            for (let i = orphanedFlags.length - 1; i >= 0; i--) {
+                const idx = orphanedFlags[i].index
+                const removed = args.splice(idx, 1)
+                logger.error(`  Removed orphan at [${idx}]: "${removed[0]}"`)
+            }
+            
+            logger.error('=== END ORPHAN FLAG FIX ===')
+        }
+
+        // 🔍 CRITICAL DEBUG: Log all args before spawn to identify malformed arguments
+        logger.info('=== FINAL SPAWN ARGUMENTS DEBUG ===')
+        logger.info(`Total args: ${args.length}`)
+        
+        // Check for problematic patterns
+        const problematicArgs = []
+        for (let i = 0; i < args.length; i++) {
+            const arg = args[i]
+            const argType = typeof arg
+            const isArray = Array.isArray(arg)
+            
+            // Log every argument for debugging
+            if (i < 20 || i > args.length - 20) {
+                logger.info(`  [${i}] (${argType}${isArray ? '/array' : ''}) ${JSON.stringify(arg).substring(0, 100)}`)
+            }
+            
+            // Detect problematic patterns
+            if (argType !== 'string') {
+                problematicArgs.push({ index: i, type: argType, value: arg })
+            } else if (arg.includes('java.base') && !arg.startsWith('--add-opens') && !arg.startsWith('--add-exports')) {
+                // This might be a malformed --add-opens argument
+                logger.error(`  ⚠️ SUSPICIOUS ARG at [${i}]: ${arg}`)
+                problematicArgs.push({ index: i, type: 'suspicious-java.base', value: arg })
+            }
+        }
+        
+        if (problematicArgs.length > 0) {
+            logger.error(`=== ${problematicArgs.length} PROBLEMATIC ARGUMENTS DETECTED ===`)
+            for (const p of problematicArgs) {
+                logger.error(`  [${p.index}] type=${p.type}, value=${JSON.stringify(p.value)}`)
+            }
+            logger.error('===========================================')
+        }
+        
+        logger.info('=== END SPAWN ARGUMENTS DEBUG ===')
 
         const child = child_process.spawn(javaExecutable, args, {
             cwd: this.gameDir,
@@ -503,25 +573,67 @@ class ProcessBuilder {
      * Deduplicate JVM arguments by key. Keeps first occurrence.
      * Key is extracted from -Dkey=value or the entire arg if no = sign.
      * 
+     * CRITICAL: For paired args like --add-opens and --add-exports:
+     * - They are NOT deduplicated as they can have multiple values
+     * - Full "flag+value" pairs are deduplicated (e.g., "--add-opens java.base/x=y")
+     * 
      * @param {Array<string>} args Array of JVM arguments
      * @returns {Array<string>} Deduplicated array
      */
     _deduplicateJvmArgs(args) {
         const seen = new Set()
+        const pairedArgsSeen = new Set() // For --add-opens/--add-exports full pairs
         const result = []
         
-        for (const arg of args) {
+        // Paired flags that can appear multiple times with different values
+        const pairedFlags = new Set(['--add-opens', '--add-exports', '--add-reads', '--add-modules'])
+        
+        for (let i = 0; i < args.length; i++) {
+            const arg = args[i]
+            
             // Skip invalid args (not string or empty)
             if (typeof arg !== 'string' || !arg.trim()) {
                 logger.warn(`Invalid JVM arg detected (type: ${typeof arg}): ${JSON.stringify(arg)} - skipping`)
                 continue
             }
             
-            // Extract key: -Dkey=value → -Dkey, -Xmx4G → -Xmx4G
-            const key = arg.includes('=') ? arg.split('=')[0] : arg.split(/\s+/)[0]
+            // Check if this is a paired flag (--add-opens, --add-exports, etc.)
+            if (pairedFlags.has(arg)) {
+                // Look ahead for the value
+                const nextArg = args[i + 1]
+                if (nextArg && typeof nextArg === 'string' && !nextArg.startsWith('-')) {
+                    // Deduplicate by full pair: "--add-opens java.base/x=y"
+                    const pairKey = `${arg} ${nextArg}`
+                    if (!pairedArgsSeen.has(pairKey)) {
+                        pairedArgsSeen.add(pairKey)
+                        result.push(arg)
+                        result.push(nextArg)
+                    } else {
+                        logger.debug(`Duplicate paired arg: ${pairKey} (skipping)`)
+                    }
+                    i++ // Skip the value we just processed
+                } else {
+                    // Orphan flag without value - this is an ERROR state
+                    logger.error(`CRITICAL: Orphan paired flag detected: "${arg}" at index ${i} without value (next: "${nextArg}")`)
+                    // Don't push orphan flags - they break Java
+                }
+                continue
+            }
+            
+            // Regular args: Extract key: -Dkey=value → -Dkey, -Xmx4G → -Xmx
+            let key
+            if (arg.startsWith('-D') && arg.includes('=')) {
+                key = arg.split('=')[0]
+            } else if (arg.startsWith('-X') && arg.length > 2) {
+                // -Xmx4G → -Xmx, -Xms2G → -Xms
+                const match = arg.match(/^(-X[a-z]+)/i)
+                key = match ? match[1] : arg
+            } else {
+                key = arg
+            }
             
             if (seen.has(key)) {
-                logger.warn(`Duplicate JVM arg detected: ${key} (keeping first occurrence)`)
+                logger.debug(`Duplicate JVM arg detected: ${key} (keeping first occurrence)`)
                 continue
             }
             
@@ -548,6 +660,92 @@ class ProcessBuilder {
             }
             return arg
         })
+    }
+
+    /**
+     * ✅ CRITICAL FIX v1.0.5: Process Forge JVM args correctly
+     * 
+     * Forge sends JVM args as a FLAT string array:
+     *   ["--add-opens", "java.base/x=cpw", "java.base/y=cpw", "--add-exports", "java.base/z=cpw"]
+     * 
+     * Java requires EACH value to have its own flag:
+     *   --add-opens java.base/x=cpw --add-opens java.base/y=cpw --add-exports java.base/z=cpw
+     * 
+     * Previous bug (v1.0.4): Pushed flag when first seen AND before each value = DUPLICATE FLAGS
+     * 
+     * This fix: Only push flag+value PAIRS. The flag is NOT pushed when first seen,
+     * it's only pushed when we have a value to pair it with.
+     * 
+     * @param {Array} jvmArgs - Raw JVM args from modManifest.arguments.jvm
+     * @param {Set<string>} pairedFlags - Flags that require a following value (--add-opens, etc.)
+     * @returns {Array<string>} Correctly formatted JVM args
+     */
+    _processForgeJvmArgs(jvmArgs, pairedFlags) {
+        const result = []
+        let currentFlag = null // Track the current paired flag
+        
+        const processArg = (rawArg) => {
+            if (typeof rawArg !== 'string') return
+            
+            // Replace placeholders
+            const arg = rawArg
+                .replaceAll('${library_directory}', this.libPath)
+                .replaceAll('${classpath_separator}', ProcessBuilder.getClasspathSeparator())
+                .replaceAll('${version_name}', this.modManifest.id)
+            
+            // Check if this is a paired flag (--add-opens, --add-exports, etc.)
+            if (pairedFlags.has(arg)) {
+                // Remember this flag for the next value(s)
+                // DO NOT push it yet - only push when we have the value
+                currentFlag = arg
+                logger.debug(`  FORGE ARG: Remembered flag "${arg}" for pairing`)
+                return
+            }
+            
+            // Check if this is another flag (starts with -)
+            if (arg.startsWith('-')) {
+                // This is a non-paired flag or the start of a new sequence
+                // Reset currentFlag and push this arg directly
+                currentFlag = null
+                result.push(arg)
+                logger.debug(`  FORGE ARG: Regular flag "${arg}"`)
+                return
+            }
+            
+            // This is a value (doesn't start with -)
+            if (currentFlag) {
+                // We have a pending paired flag - push flag+value
+                result.push(currentFlag)
+                result.push(arg)
+                logger.debug(`  FORGE ARG: Pair "${currentFlag}" + "${arg}"`)
+                // Keep currentFlag for next value (Forge may send multiple values per flag)
+            } else {
+                // Value without a paired flag - push as-is (unusual but handle it)
+                result.push(arg)
+                logger.debug(`  FORGE ARG: Standalone value "${arg}"`)
+            }
+        }
+        
+        // Process all args
+        for (const argItem of jvmArgs) {
+            if (Array.isArray(argItem)) {
+                // Handle nested arrays (legacy format)
+                for (const subArg of argItem) {
+                    processArg(subArg)
+                }
+            } else if (typeof argItem === 'string') {
+                processArg(argItem)
+            }
+            // Skip objects with rules - they're processed elsewhere
+        }
+        
+        // Check for orphaned flag at the end
+        if (currentFlag) {
+            logger.warn(`  FORGE ARG: Orphaned flag "${currentFlag}" at end of array (no value followed)`)
+            // Don't push orphaned flags - they break Java
+        }
+        
+        return result
     }
 
     /**
@@ -999,22 +1197,21 @@ class ProcessBuilder {
         // ✅ Merge modManifest JVM args (Fabric/Quilt for old MC versions)
         if(this.modManifest !== this.vanillaManifest && this.modManifest.arguments && this.modManifest.arguments.jvm != null && !this.usingOptiFine) {
             logger.info('=== MERGING MOD LOADER JVM ARGS (1.12) ===')
-            let mergedCount = 0
             
-            for(const argStr of this.modManifest.arguments.jvm) {
-                if(typeof argStr === 'string') {
-                    const processedArg = argStr
-                        .replaceAll('${library_directory}', this.libPath)
-                        .replaceAll('${classpath_separator}', ProcessBuilder.getClasspathSeparator())
-                        .replaceAll('${version_name}', this.modManifest.id)
-                    
-                    args.push(processedArg)
-                    logger.info(`  [${mergedCount}] ${processedArg}`)
-                    mergedCount++
-                }
+            // ✅ CRITICAL FIX v1.0.5: Correct handling of Forge's FLAT string array format
+            // Forge sends: ["--add-opens", "val1", "val2", "--add-exports", "val3"]
+            // Java requires: --add-opens val1 --add-opens val2 --add-exports val3
+            // 
+            // FIX: Do NOT push flag when first seen. Only push flag+value PAIRS.
+            // Previous bug: pushed flag twice (once when seen, once before value)
+            const pairedFlags = new Set(['--add-opens', '--add-exports', '--add-reads', '--add-modules', '-p', '--module-path'])
+            const processedJvmArgs = this._processForgeJvmArgs(this.modManifest.arguments.jvm, pairedFlags)
+            
+            for (const arg of processedJvmArgs) {
+                args.push(arg)
             }
             
-            logger.info(`  ✅ Merged ${mergedCount} JVM args from modManifest.arguments.jvm`)
+            logger.info(`  ✅ Merged ${processedJvmArgs.length} JVM args from modManifest.arguments.jvm`)
         }
 
         // Java Arguments
@@ -1063,7 +1260,10 @@ class ProcessBuilder {
         const argDiscovery = /\${*(.*)}/
 
         // JVM Arguments First
-        let args = this.vanillaManifest.arguments.jvm
+        // ✅ CRITICAL FIX: Deep copy the vanilla manifest JVM args to avoid modifying the original
+        // The vanilla manifest may be reused across multiple launches, and modifying it directly
+        // causes accumulated corruption of the arguments array
+        let args = JSON.parse(JSON.stringify(this.vanillaManifest.arguments.jvm))
 
         // Debug securejarhandler
         // args.push('-Dbsl.debug=true')
@@ -1072,25 +1272,22 @@ class ProcessBuilder {
         // (es decir, si hay un mod loader como Forge/Fabric/Quilt, pero NO OptiFine)
         // OptiFine no necesita argumentos JVM especiales
         if(this.modManifest !== this.vanillaManifest && this.modManifest.arguments && this.modManifest.arguments.jvm != null && !this.usingOptiFine) {
-            logger.info('=== MERGING MOD LOADER JVM ARGS ===')
-            let mergedCount = 0
+            logger.info('=== MERGING MOD LOADER JVM ARGS (1.13+) ===')
             
-            for(const argStr of this.modManifest.arguments.jvm) {
-                // Solo procesar si es un string (mod loaders como Forge/Fabric/Quilt)
-                // Si es un objeto (vanilla rules), lo procesará después en el loop general
-                if(typeof argStr === 'string') {
-                    const processedArg = argStr
-                        .replaceAll('${library_directory}', this.libPath)
-                        .replaceAll('${classpath_separator}', ProcessBuilder.getClasspathSeparator())
-                        .replaceAll('${version_name}', this.modManifest.id)
-                    
-                    args.push(processedArg)
-                    logger.info(`  [${mergedCount}] ${processedArg}`)
-                    mergedCount++
-                }
+            // ✅ CRITICAL FIX v1.0.5: Correct handling of Forge's FLAT string array format
+            // Forge sends: ["--add-opens", "val1", "val2", "--add-exports", "val3"]
+            // Java requires: --add-opens val1 --add-opens val2 --add-exports val3
+            // 
+            // FIX: Do NOT push flag when first seen. Only push flag+value PAIRS.
+            // Previous bug: pushed flag twice (once when seen, once before value)
+            const pairedFlags = new Set(['--add-opens', '--add-exports', '--add-reads', '--add-modules', '-p', '--module-path'])
+            const processedJvmArgs = this._processForgeJvmArgs(this.modManifest.arguments.jvm, pairedFlags)
+            
+            for (const arg of processedJvmArgs) {
+                args.push(arg)
             }
             
-            logger.info(`  ✅ Merged ${mergedCount} JVM args from modManifest.arguments.jvm`)
+            logger.info(`  ✅ Merged ${processedJvmArgs.length} JVM args from modManifest.arguments.jvm`)
         }
         
         // ✅ NEOFORGE CRITICAL FIX: Do NOT add SRG JAR to module path
@@ -1327,9 +1524,10 @@ class ProcessBuilder {
         }
 
         // Filter null values y cualquier objeto que haya quedado sin resolver
+        // CRITICAL: Flatten nested arrays to prevent incorrect command line formatting
         args = args.filter(arg => {
             return arg != null && typeof arg !== 'object'
-        })
+        }).flat(Infinity) // Flatten any nested arrays completely
 
         return args
     }

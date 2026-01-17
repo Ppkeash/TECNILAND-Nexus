@@ -440,56 +440,11 @@ exports.getQuiltVersions = async function(minecraftVersion, forceRefresh = false
  * @param {string} minecraftVersion - Versión de Minecraft (ej: "1.20.1")
  * @param {boolean} forceRefresh - Forzar actualización desde API
  * @returns {Promise<Array<string>>} Array de versiones de NeoForge
+ * 
+ * @deprecated Esta función está definida más abajo con mejor lógica de filtrado.
+ * NOTA: Esta definición fue ELIMINADA en v1.0.5 - era código muerto sobrescrito por la versión en L567+
  */
-exports.getNeoForgeVersions = async function(minecraftVersion, forceRefresh = false) {
-    // Cargar caché si no está en memoria
-    if (!versionCache.lastUpdated) {
-        loadCache()
-    }
-
-    // Verificar si necesitamos refrescar
-    if (!forceRefresh && !isCacheExpired() && versionCache.neoforge[minecraftVersion]) {
-        logger.info(`Usando caché de versiones de NeoForge para MC ${minecraftVersion}`)
-        return versionCache.neoforge[minecraftVersion]
-    }
-
-    // Obtener desde API
-    logger.info(`Obteniendo versiones de NeoForge para MC ${minecraftVersion}...`)
-    try {
-        const response = await axios.get(API_URLS.NEOFORGE_MAVEN, { timeout: 10000 })
-        const versions = response.data.versions || []
-
-        // Filtrar versiones que correspondan a la versión de Minecraft
-        // NeoForge usa formato: 20.2.86 (para MC 1.20.2), 20.4.XX (para MC 1.20.4), etc.
-        const mcVersionParts = minecraftVersion.split('.')
-        const majorMinor = `${mcVersionParts[1]}.${mcVersionParts[2] || 0}` // "20.1" para MC 1.20.1
-
-        const filteredVersions = versions.filter(v => v.startsWith(majorMinor))
-
-        if (filteredVersions.length > 0) {
-            versionCache.neoforge[minecraftVersion] = filteredVersions
-            versionCache.lastUpdated = new Date().toISOString()
-            saveCache()
-
-            logger.info(`Obtenidas ${filteredVersions.length} versiones de NeoForge para MC ${minecraftVersion}`)
-            return filteredVersions
-        } else {
-            logger.warn(`No hay versiones de NeoForge disponibles para MC ${minecraftVersion}`)
-            return []
-        }
-
-    } catch (err) {
-        logger.error('Error al obtener versiones de NeoForge:', err.message)
-        
-        // Intentar usar caché
-        if (versionCache.neoforge[minecraftVersion]) {
-            logger.warn(`Usando caché expirado de NeoForge para MC ${minecraftVersion}`)
-            return versionCache.neoforge[minecraftVersion]
-        }
-
-        return []
-    }
-}
+// [ELIMINADO v1.0.5] Primera definición duplicada de getNeoForgeVersions - ver línea ~560 para la versión activa
 
 /**
  * Inicializar caché al arrancar la aplicación

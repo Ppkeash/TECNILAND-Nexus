@@ -33,7 +33,7 @@ We envision more than just a simple launcher: we're building an **ecosystem** wh
 
 > 🚧 **IMPORTANT WARNING:** NeoForge 1.20.4 is in maintenance mode due to critical instability (frequent JPMS crashes, requires Java 17 exactly, complex workarounds). **We recommend using stable Forge (1.20.1/1.20.6).** If you attempt to use NeoForge, the launcher will require confirmation on every launch.
 
-We're in **Beta phase (0.x.x)**, meaning the launcher is functional and stable, but actively developed with new features arriving regularly.
+We're in **v1.0.6 (stable)**, meaning the launcher is functional and stable, with active development and new features arriving regularly.
 
 ---
 
@@ -52,7 +52,7 @@ We've thoroughly tested all Forge versions from Minecraft 1.13 to 1.21.x. Here a
 | 1.17.1    | ✅ OK  | Full support |
 | 1.18.2    | ✅ OK  | Stable, widely used version |
 | 1.19.4    | ✅ OK  | Fixed: Classpath deduplication |
-| 1.20.1    | ✅ OK  | Full support, very stable |
+| 1.20.1    | ✅ OK  | **Fix v1.0.6:** JVM args processed correctly |
 | 1.21.x    | ✅ OK  | Fixed: Forge universal + client JAR handling |
 
 ---

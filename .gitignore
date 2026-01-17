@@ -27,6 +27,13 @@ log_errores*.txt
 distribution-local.json
 test-results.json
 test-loaders.js
+test-forge-args.js
+
+# Documentation (excluded from repo)
+docs/
+RELEASE_NOTES_*.md
+STATUS_SUMMARY.md
+GITHUB_RELEASE_INSTRUCTIONS.md
 
 # OS-specific
 .DS_Store

@@ -31,57 +31,178 @@ VersionAPI.initializeCache().catch(err => {
     console.error('Error al inicializar caché de versiones:', err)
 })
 
-// Setup auto updater.
+// =====================================================
+// AUTO UPDATER - FIX v1.0.5: Refactorización completa
+// =====================================================
+
+// Referencia global al webContents para enviar eventos de actualización
+let autoUpdaterWebContents = null
+let autoUpdaterInitialized = false
+
+/**
+ * Enviar notificación al renderer de forma segura
+ */
+function sendAutoUpdateNotification(channel, ...args) {
+    if (autoUpdaterWebContents && !autoUpdaterWebContents.isDestroyed()) {
+        autoUpdaterWebContents.send(channel, ...args)
+    } else {
+        logger.warn('AutoUpdater: No hay webContents válido para enviar notificación')
+    }
+}
+
+/**
+ * Inicializar el auto-updater (solo una vez)
+ */
 function initAutoUpdater(event, data) {
+    // Guardar referencia al webContents
+    autoUpdaterWebContents = event.sender
+    
+    // Si ya está inicializado, solo actualizar referencia y retornar
+    if (autoUpdaterInitialized) {
+        logger.debug('AutoUpdater: Ya inicializado, actualizando webContents')
+        return
+    }
 
     if(data){
         autoUpdater.allowPrerelease = true
     } else {
-        // Defaults to true if application version contains prerelease components (e.g. 0.12.1-alpha.1)
-        // autoUpdater.allowPrerelease = true
+        // Defaults to true if application version contains prerelease components
     }
     
     if(isDev){
         autoUpdater.autoInstallOnAppQuit = false
         autoUpdater.updateConfigPath = path.join(__dirname, 'dev-app-update.yml')
     }
-    if(process.platform === 'darwin'){
-        autoUpdater.autoDownload = false
-    }
-    autoUpdater.on('update-available', (info) => {
-        event.sender.send('autoUpdateNotification', 'update-available', info)
-    })
-    autoUpdater.on('update-downloaded', (info) => {
-        event.sender.send('autoUpdateNotification', 'update-downloaded', info)
-    })
-    autoUpdater.on('update-not-available', (info) => {
-        event.sender.send('autoUpdateNotification', 'update-not-available', info)
-    })
+    
+    // Desactivar autoDownload en TODAS las plataformas
+    autoUpdater.autoDownload = false
+    autoUpdater.autoInstallOnAppQuit = true
+    
+    // ===============================
+    // EVENTOS DEL AUTO-UPDATER
+    // ===============================
+    
     autoUpdater.on('checking-for-update', () => {
-        event.sender.send('autoUpdateNotification', 'checking-for-update')
+        logger.info('AutoUpdater: Verificando actualizaciones...')
+        sendAutoUpdateNotification('autoUpdateNotification', 'checking-for-update')
     })
+    
+    autoUpdater.on('update-available', (info) => {
+        logger.info(`AutoUpdater: Nueva actualización disponible: ${info.version}`)
+        sendAutoUpdateNotification('autoUpdateNotification', 'update-available', info)
+    })
+    
+    autoUpdater.on('update-not-available', (info) => {
+        logger.info('AutoUpdater: No hay actualizaciones disponibles')
+        sendAutoUpdateNotification('autoUpdateNotification', 'update-not-available', info)
+    })
+    
+    autoUpdater.on('download-progress', (progressObj) => {
+        // Log detallado para debugging
+        logger.info(`AutoUpdater: Progreso descarga: ${progressObj.percent.toFixed(1)}% ` +
+            `(${formatBytes(progressObj.transferred)}/${formatBytes(progressObj.total)}) ` +
+            `@ ${formatBytes(progressObj.bytesPerSecond)}/s`)
+        sendAutoUpdateNotification('autoUpdateNotification', 'download-progress', progressObj)
+    })
+    
+    autoUpdater.on('update-downloaded', (info) => {
+        logger.info(`AutoUpdater: Actualización ${info.version} descargada y lista para instalar`)
+        sendAutoUpdateNotification('autoUpdateNotification', 'update-downloaded', info)
+    })
+    
     autoUpdater.on('error', (err) => {
-        event.sender.send('autoUpdateNotification', 'realerror', err)
-    }) 
+        logger.error('AutoUpdater: Error:', err.message || err)
+        logger.error('AutoUpdater: Stack:', err.stack || 'no stack')
+        sendAutoUpdateNotification('autoUpdateNotification', 'realerror', {
+            message: err.message || String(err),
+            code: err.code || 'UNKNOWN_ERROR'
+        })
+    })
+    
+    autoUpdaterInitialized = true
+    logger.info('AutoUpdater: Inicializado correctamente')
+}
+
+// Helper para formatear bytes
+function formatBytes(bytes, decimals = 2) {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const dm = decimals < 0 ? 0 : decimals
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i]
 }
 
 // Open channel to listen for update actions.
 ipcMain.on('autoUpdateAction', (event, arg, data, data2) => {
+    // Actualizar webContents en cada mensaje para mantener referencia válida
+    autoUpdaterWebContents = event.sender
+    
+    logger.debug(`AutoUpdater IPC: Recibido "${arg}"`)
+    
     switch(arg){
         case 'initAutoUpdater':
-            logger.info('Inicializando sistema de actualizaciones')
-            console.log('Initializing auto updater.')
+            logger.info('AutoUpdater: Inicializando sistema de actualizaciones')
             initAutoUpdater(event, data)
-            event.sender.send('autoUpdateNotification', 'ready')
+            sendAutoUpdateNotification('autoUpdateNotification', 'ready')
             break
+            
         case 'checkForUpdate':
-            logger.info('Verificando actualizaciones disponibles')
+            logger.info('AutoUpdater: Verificando actualizaciones disponibles...')
             autoUpdater.checkForUpdates()
+                .then(result => {
+                    if (result) {
+                        logger.info(`AutoUpdater: Resultado de checkForUpdates: ${JSON.stringify({
+                            updateInfo: result.updateInfo ? result.updateInfo.version : 'none',
+                            cancellationToken: !!result.cancellationToken
+                        })}`)
+                    }
+                })
                 .catch(err => {
-                    logger.error('Error al verificar actualizaciones', err)
-                    event.sender.send('autoUpdateNotification', 'realerror', err)
+                    logger.error('AutoUpdater: Error al verificar actualizaciones:', err.message || err)
+                    sendAutoUpdateNotification('autoUpdateNotification', 'realerror', {
+                        message: err.message || String(err),
+                        code: err.code || 'CHECK_UPDATE_ERROR'
+                    })
                 })
             break
+            
+        case 'downloadUpdate':
+            logger.info('AutoUpdater: ======================================')
+            logger.info('AutoUpdater: Usuario solicitó descarga manual')
+            logger.info('AutoUpdater: Ejecutando autoUpdater.downloadUpdate()...')
+            logger.info('AutoUpdater: ======================================')
+            
+            // Notificar al renderer que comenzamos
+            sendAutoUpdateNotification('autoUpdateNotification', 'download-progress', {
+                percent: 0,
+                transferred: 0,
+                total: 0,
+                bytesPerSecond: 0
+            })
+            
+            autoUpdater.downloadUpdate()
+                .then(downloadedFiles => {
+                    logger.info(`AutoUpdater: downloadUpdate() COMPLETADO`)
+                    logger.info(`AutoUpdater: Archivos descargados: ${JSON.stringify(downloadedFiles)}`)
+                })
+                .catch(err => {
+                    logger.error('AutoUpdater: ERROR en downloadUpdate():')
+                    logger.error('AutoUpdater: Mensaje:', err.message || err)
+                    logger.error('AutoUpdater: Código:', err.code || 'SIN_CODIGO')
+                    logger.error('AutoUpdater: Stack:', err.stack || 'sin stack')
+                    sendAutoUpdateNotification('autoUpdateNotification', 'realerror', {
+                        message: err.message || String(err),
+                        code: err.code || 'DOWNLOAD_ERROR'
+                    })
+                })
+            break
+            
+        case 'installUpdateNow':
+            logger.info('AutoUpdater: Instalando actualización y reiniciando launcher...')
+            autoUpdater.quitAndInstall()
+            break
+            
         case 'allowPrereleaseChange':
             if(!data){
                 const preRelComp = semver.prerelease(app.getVersion())
@@ -93,11 +214,9 @@ ipcMain.on('autoUpdateAction', (event, arg, data, data2) => {
             } else {
                 autoUpdater.allowPrerelease = data
             }
+            logger.debug(`AutoUpdater: allowPrerelease cambiado a ${autoUpdater.allowPrerelease}`)
             break
-        case 'installUpdateNow':
-            logger.info('Instalando actualización y reiniciando launcher')
-            autoUpdater.quitAndInstall()
-            break
+            
         case 'showRestartDialog':
             dialog.showMessageBox({
                 type: 'info',
@@ -106,9 +225,9 @@ ipcMain.on('autoUpdateAction', (event, arg, data, data2) => {
                 buttons: ['OK']
             })
             break
+            
         default:
-            logger.warn(`Acción de auto-updater desconocida: ${arg}`)
-            console.log('Unknown argument', arg)
+            logger.warn(`AutoUpdater: Acción desconocida: ${arg}`)
             break
     }
 })

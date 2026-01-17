@@ -2937,6 +2937,81 @@ function showNoUpdatesMessage(){
     }, 5000)
 }
 
+// ✅ FIX v1.0.5: Variables para la barra de progreso de descarga
+let settingsUpdateProgressContainer
+let settingsUpdateProgressBar
+let settingsUpdateProgressText
+
+/**
+ * Mostrar u ocultar la barra de progreso de descarga
+ * @param {boolean} show - Mostrar o no la barra
+ */
+function showDownloadProgressBar(show = true) {
+    // Buscar o crear el contenedor de progreso
+    if (!settingsUpdateProgressContainer) {
+        settingsUpdateProgressContainer = document.getElementById('settingsUpdateProgress')
+        if (!settingsUpdateProgressContainer && settingsUpdateActionButton) {
+            // Crear dinámicamente si no existe
+            settingsUpdateProgressContainer = document.createElement('div')
+            settingsUpdateProgressContainer.id = 'settingsUpdateProgress'
+            settingsUpdateProgressContainer.style.cssText = 'width: 100%; margin-top: 10px; display: none;'
+            settingsUpdateProgressContainer.innerHTML = `
+                <div style="background: rgba(255,255,255,0.1); border-radius: 4px; height: 20px; overflow: hidden; margin-bottom: 5px;">
+                    <div id="settingsUpdateProgressBar" style="background: linear-gradient(90deg, #00d4ff, #7b68ee); height: 100%; width: 0%; transition: width 0.2s ease;"></div>
+                </div>
+                <span id="settingsUpdateProgressText" style="font-size: 12px; color: #a0a0a0;">0%</span>
+            `
+            settingsUpdateActionButton.parentNode.insertBefore(settingsUpdateProgressContainer, settingsUpdateActionButton.nextSibling)
+        }
+    }
+    
+    if (settingsUpdateProgressContainer) {
+        settingsUpdateProgressContainer.style.display = show ? 'block' : 'none'
+        settingsUpdateProgressBar = document.getElementById('settingsUpdateProgressBar')
+        settingsUpdateProgressText = document.getElementById('settingsUpdateProgressText')
+        
+        if (show) {
+            // Reset al mostrar
+            if (settingsUpdateProgressBar) settingsUpdateProgressBar.style.width = '0%'
+            if (settingsUpdateProgressText) settingsUpdateProgressText.innerHTML = '0%'
+        }
+    }
+}
+
+/**
+ * Actualizar el progreso de descarga de la actualización
+ * @param {Object} progressObj - Objeto con percent, transferred, total, bytesPerSecond
+ */
+function updateDownloadProgress(progressObj) {
+    if (!settingsUpdateProgressBar || !settingsUpdateProgressText) {
+        showDownloadProgressBar(true) // Asegurar que exista
+    }
+    
+    const percent = progressObj.percent || 0
+    const transferred = formatBytesUI(progressObj.transferred || 0)
+    const total = formatBytesUI(progressObj.total || 0)
+    const speed = formatBytesUI(progressObj.bytesPerSecond || 0)
+    
+    if (settingsUpdateProgressBar) {
+        settingsUpdateProgressBar.style.width = `${percent}%`
+    }
+    if (settingsUpdateProgressText) {
+        settingsUpdateProgressText.innerHTML = `${percent.toFixed(1)}% (${transferred}/${total}) @ ${speed}/s`
+    }
+}
+
+/**
+ * Formatear bytes para la UI
+ */
+function formatBytesUI(bytes, decimals = 2) {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const dm = decimals < 0 ? 0 : decimals
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i]
+}
+
 /**
  * Populate the update tab with relevant information.
  * 
@@ -2953,11 +3028,21 @@ function populateSettingsUpdateInformation(data){
         populateVersionInformation(data.version, settingsUpdateVersionValue, settingsUpdateVersionTitle, settingsUpdateVersionCheck)
         
         if(process.platform === 'darwin'){
-            settingsUpdateButtonStatus(Lang.queryJS('settings.updates.downloadButton'), false, () => {
+            // macOS: Abrir descarga manual en navegador
+            settingsUpdateButtonStatus(Lang.queryJS('settings.updates.downloadButtonMac'), false, () => {
                 shell.openExternal(data.darwindownload)
             })
         } else {
-            settingsUpdateButtonStatus(Lang.queryJS('settings.updates.downloadingButton'), true)
+            // Windows/Linux - Mostrar botón para iniciar descarga manual
+            settingsUpdateButtonStatus(Lang.queryJS('settings.updates.downloadButton'), false, () => {
+                if(!isDev){
+                    console.log('[AutoUpdater UI] Usuario hizo clic en Descargar Actualización')
+                    console.log('[AutoUpdater UI] Enviando IPC: downloadUpdate')
+                    ipcRenderer.send('autoUpdateAction', 'downloadUpdate')
+                    settingsUpdateButtonStatus(Lang.queryJS('settings.updates.downloadingButton'), true)
+                    showDownloadProgressBar(true)
+                }
+            })
         }
     } else {
         settingsUpdateTitle.innerHTML = Lang.queryJS('settings.updates.latestVersionTitle')
@@ -2979,6 +3064,14 @@ function populateSettingsUpdateInformation(data){
  */
 function prepareUpdateTab(data = null){
     initUpdateTabElements() // Inicializar elementos del DOM primero
+    
+    // Si hay info de update pendiente (llegó antes de que settings.js cargara), usarla
+    if (!data && window.pendingUpdateInfo) {
+        console.log('[Settings] Usando pendingUpdateInfo:', window.pendingUpdateInfo.version)
+        data = window.pendingUpdateInfo
+        window.pendingUpdateInfo = null // Limpiar
+    }
+    
     populateSettingsUpdateInformation(data)
 }
 

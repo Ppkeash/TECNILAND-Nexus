@@ -335,7 +335,8 @@ releaseNotesFailed = "Error al cargar las notas de la versión."
 newReleaseTitle = "Nueva Versión Disponible"
 newPreReleaseTitle = "Nuevo Pre-lanzamiento Disponible"
 downloadingButton = "Descargando.."
-downloadButton = 'Descargar desde GitHub<span style="font-size: 10px;color: gray;text-shadow: none !important;">Cierra el launcher y ejecuta el dmg para actualizar.</span>'
+downloadButton = "Descargar Actualización"
+downloadButtonMac = 'Descargar desde GitHub<span style="font-size: 10px;color: gray;text-shadow: none !important;">Cierra el launcher y ejecuta el dmg para actualizar.</span>'
 latestVersionTitle = "Estás Usando la Última Versión"
 checkForUpdatesButton = "Buscar Actualizaciones"
 checkingForUpdatesButton = "Buscando Actualizaciones.."
