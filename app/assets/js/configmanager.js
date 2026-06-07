@@ -94,6 +94,10 @@ const DEFAULT_CONFIG = {
         },
         java: {
             additionalJvmArgs: []  // Global JVM args (new)
+        },
+        skinViewer3D: {
+            enabled: true,  // Renderizado 3D de skins (true = 3D, false = 2D)
+            quality: 'medium'  // Calidad: 'low', 'medium', 'high'
         }
     },
     newsCache: {
@@ -291,7 +295,7 @@ exports.setClientToken = function(clientToken){
  * @returns {string} The ID of the selected serverpack.
  */
 exports.getSelectedServer = function(def = false){
-    return !def ? config.selectedServer : DEFAULT_CONFIG.clientToken
+    return !def ? config.selectedServer : DEFAULT_CONFIG.selectedServer
 }
 
 /**
@@ -487,6 +491,126 @@ exports.setOfflineAccountSkin = function(uuid, skinData) {
     return false
 }
 
+// =============================================================================
+// TECNILAND Account Functions
+// =============================================================================
+
+/**
+ * Add a TECNILAND authenticated account to the database.
+ * 
+ * @param {string} uuid The UUID of the account.
+ * @param {string} accessToken The JWT access token.
+ * @param {string} username The username of the account.
+ * @param {string} displayName The display name of the account.
+ * @param {string} email The email of the account.
+ * @param {string} clientToken The client token for Yggdrasil.
+ * @param {string} yggdrasilToken The Yggdrasil access token.
+ * 
+ * @returns {Object} The authenticated account object created by this action.
+ */
+exports.addTecnilandAuthAccount = function(uuid, accessToken, username, displayName, email, clientToken, yggdrasilToken) {
+    config.selectedAccount = uuid
+    config.clientToken = clientToken
+    config.authenticationDatabase[uuid] = {
+        type: 'tecniland',
+        accessToken: accessToken,
+        username: username.trim(),
+        uuid: uuid.trim(),
+        displayName: displayName ? displayName.trim() : username.trim(),
+        email: email ? email.trim() : null,
+        clientToken: clientToken,
+        yggdrasilToken: yggdrasilToken
+    }
+    return config.authenticationDatabase[uuid]
+}
+
+/**
+ * Update a TECNILAND authenticated account with new token data.
+ * 
+ * @param {string} uuid The UUID of the account to update.
+ * @param {Object} updates The updates to apply (accessToken, yggdrasilToken, clientToken, etc).
+ * 
+ * @returns {Object|null} The updated account object or null if not found.
+ */
+exports.updateTecnilandAuthAccount = function(uuid, updates) {
+    const account = config.authenticationDatabase[uuid]
+    if (account && account.type === 'tecniland') {
+        if (updates.accessToken) account.accessToken = updates.accessToken
+        if (updates.yggdrasilToken) account.yggdrasilToken = updates.yggdrasilToken
+        if (updates.clientToken) account.clientToken = updates.clientToken
+        if (updates.displayName) account.displayName = updates.displayName
+        if (updates.username) account.username = updates.username
+        return account
+    }
+    return null
+}
+
+/**
+ * Get all TECNILAND accounts from the database.
+ * 
+ * @returns {Array<Object>} Array of TECNILAND account objects.
+ */
+exports.getTecnilandAccounts = function() {
+    const tecnilandAccounts = []
+    for (const uuid in config.authenticationDatabase) {
+        if (config.authenticationDatabase[uuid].type === 'tecniland') {
+            tecnilandAccounts.push(config.authenticationDatabase[uuid])
+        }
+    }
+    return tecnilandAccounts
+}
+
+/**
+ * Get the TECNILAND session data (stored separately for quick access).
+ * 
+ * @returns {Object|null} The TECNILAND session data or null.
+ */
+exports.getTecnilandSession = function() {
+    const session = config.tecnilandSession || null
+    logger.debug('[getTecnilandSession] Llamado')
+    logger.debug('[getTecnilandSession] Datos:', session ? 'EXISTE' : 'NULL')
+    
+    if (session) {
+        logger.debug('[getTecnilandSession] Keys:', Object.keys(session).join(', '))
+        
+        // Validar estructura: si tiene campos viejos pero no los nuevos, limpiar
+        if (session.lastValidated && !session.jwtToken && !session.user) {
+            logger.warn('[getTecnilandSession] Detectada estructura antigua/inválida, limpiando')
+            delete config.tecnilandSession
+            return null
+        }
+    }
+    
+    return session
+}
+
+/**
+ * Set the TECNILAND session data.
+ * 
+ * @param {Object|null} session The session data to store or null to clear.
+ */
+exports.setTecnilandSession = function(session) {
+    logger.debug('[setTecnilandSession] Recibido:', session ? 
+        (typeof session === 'object' ? JSON.stringify(Object.keys(session)) : 'NO ES OBJETO') 
+        : 'NULL')
+    
+    if (session === null) {
+        logger.debug('[setTecnilandSession] Eliminando sesión')
+        delete config.tecnilandSession
+    } else {
+        // Estructura correcta que coincide con TecnilandAuthManager.saveSession()
+        config.tecnilandSession = {
+            jwtToken: session.jwtToken,
+            jwtTokenExpiresAt: session.jwtTokenExpiresAt,
+            yggdrasilAccessToken: session.yggdrasilAccessToken,
+            yggdrasilClientToken: session.yggdrasilClientToken,
+            user: session.user,
+            lastLogin: session.lastLogin
+        }
+        logger.debug('[setTecnilandSession] Guardado con keys:', Object.keys(config.tecnilandSession).join(', '))
+    }
+}
+
 /**
  * Remove an authenticated account from the database. If the account
  * was also the selected account, a new one will be selected. If there
@@ -536,6 +660,50 @@ exports.setSelectedAccount = function(uuid){
         config.selectedAccount = uuid
     }
     return authAcc
+}
+
+/**
+ * Get the avatar URL for an account.
+ * This centralizes avatar URL logic for all account types.
+ * 
+ * @param {Object} account - The account object (or null to use selected account)
+ * @param {string} renderType - 'body', 'avatar', or 'head' (default: auto-detect)
+ * @returns {string} The URL of the avatar image
+ */
+exports.getAccountAvatarUrl = function(account = null, renderType = null) {
+    const acc = account || config.authenticationDatabase[config.selectedAccount]
+    if (!acc || !acc.uuid) {
+        return './assets/images/icons/profile.svg'
+    }
+    
+    // Auto-detect render type if not specified
+    const type = renderType || (acc.type === 'offline' ? 'avatar' : 'body')
+    
+    if (acc.type === 'tecniland') {
+        // TECNILAND accounts use the TECNILAND skin server with timestamp to avoid cache
+        try {
+            const TecnilandAuthConfig = require('./assets/js/tecnilandauth/TecnilandAuthConfig')
+            const skinUrl = TecnilandAuthConfig.getSkinUrl(acc.uuid)
+            return skinUrl ? `${skinUrl}?t=${Date.now()}` : `https://mc-heads.net/${type}/${acc.uuid}/right`
+        } catch (e) {
+            return `https://mc-heads.net/${type}/${acc.uuid}/right`
+        }
+    } else if (acc.type === 'offline') {
+        // Offline accounts - check local skin first
+        try {
+            const SkinManager = require('./assets/js/skinmanager')
+            const localSkin = SkinManager.getSkinDisplayUrl(acc.uuid, 'offline')
+            if (localSkin && !localSkin.includes('mc-heads')) {
+                return localSkin
+            }
+        } catch (e) {
+            // Fallback
+        }
+        return `https://mc-heads.net/${type}/${acc.uuid}/right`
+    } else {
+        // Microsoft/Mojang accounts
+        return `https://mc-heads.net/${type}/${acc.uuid}/right`
+    }
 }
 
 /**
@@ -1359,4 +1527,59 @@ exports.getModpackPreservedFiles = function(){
         'resourcepacks/**',
         'shaderpacks/**'
     ]
+}
+
+// ========== SkinViewer3D Settings ==========
+
+/**
+ * Get whether 3D skin rendering is enabled.
+ * 
+ * @param {boolean} def Optional. If true, returns default value.
+ * @returns {boolean} True if 3D rendering is enabled.
+ */
+exports.getSkinViewer3DEnabled = function(def = false) {
+    if (!config.settings.skinViewer3D) {
+        config.settings.skinViewer3D = DEFAULT_CONFIG.settings.skinViewer3D
+    }
+    return !def ? (config.settings.skinViewer3D.enabled ?? true) : DEFAULT_CONFIG.settings.skinViewer3D.enabled
+}
+
+/**
+ * Set whether 3D skin rendering is enabled.
+ * 
+ * @param {boolean} enabled True to enable 3D rendering.
+ */
+exports.setSkinViewer3DEnabled = function(enabled) {
+    if (!config.settings.skinViewer3D) {
+        config.settings.skinViewer3D = DEFAULT_CONFIG.settings.skinViewer3D
+    }
+    config.settings.skinViewer3D.enabled = enabled
+}
+
+/**
+ * Get the 3D rendering quality.
+ * 
+ * @param {boolean} def Optional. If true, returns default value.
+ * @returns {string} Quality setting: 'low', 'medium', or 'high'.
+ */
+exports.getSkinViewer3DQuality = function(def = false) {
+    if (!config.settings.skinViewer3D) {
+        config.settings.skinViewer3D = DEFAULT_CONFIG.settings.skinViewer3D
+    }
+    return !def ? (config.settings.skinViewer3D.quality ?? 'medium') : DEFAULT_CONFIG.settings.skinViewer3D.quality
+}
+
+/**
+ * Set the 3D rendering quality.
+ * 
+ * @param {string} quality Quality setting: 'low', 'medium', or 'high'.
+ */
+exports.setSkinViewer3DQuality = function(quality) {
+    if (!['low', 'medium', 'high'].includes(quality)) {
+        throw new Error(`Invalid quality: ${quality}. Must be 'low', 'medium', or 'high'.`)
+    }
+    if (!config.settings.skinViewer3D) {
+        config.settings.skinViewer3D = DEFAULT_CONFIG.settings.skinViewer3D
+    }
+    config.settings.skinViewer3D.quality = quality
 }
