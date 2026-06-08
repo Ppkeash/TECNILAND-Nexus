@@ -183,6 +183,9 @@ requiredValue = "* Requerido"
 title = "Error Desconocido Durante el Inicio de Sesión"
 desc = "Ocurrió un error desconocido. Por favor, consulta la consola para más detalles."
 
+[js.landing]
+noSelection = "Ningún modpack seleccionado"
+
 [js.landing.launch]
 pleaseWait = "Por favor espera..."
 failureTitle = "Error Durante el Lanzamiento"

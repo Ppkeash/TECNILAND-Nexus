@@ -176,6 +176,9 @@ requiredValue = "* Required"
 title = "Unknown Error During Login"
 desc = "An unknown error has occurred. Please see the console for details."
 
+[js.landing]
+noSelection = "No modpack selected"
+
 [js.landing.launch]
 pleaseWait = "Please wait.."
 failureTitle = "Error During Launch"
