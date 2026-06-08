@@ -257,27 +257,21 @@ $(document).on('click', 'a[href^="http"]', function(event) {
 })
 
 /**
- * Opens DevTools window if you hold (ctrl + shift + i).
- * SECURITY: Solo permitir en modo desarrollo
- * This will crash the program if you are using multiple
- * DevTools, for example the chrome debugger in VS Code. 
- * 
- * ⚠️ TEMPORARY DEBUG MODE: DevTools enabled in production for testing
+ * Abre DevTools con (Ctrl + Shift + I).
+ *
+ * FASE ALFA CERRADA: habilitado en producción para testear con usuarios de
+ * confianza de la comunidad. Riesgo aceptado por ser distribución cerrada.
+ * Para el LANZAMIENTO PÚBLICO, poner ALLOW_DEVTOOLS_IN_PROD = false y rebuildear:
+ * así DevTools solo quedará disponible en desarrollo.
  */
+const ALLOW_DEVTOOLS_IN_PROD = true
+
 document.addEventListener('keydown', function (e) {
     if((e.key === 'I' || e.key === 'i') && e.ctrlKey && e.shiftKey){
-        // TEMPORARY: DevTools habilitado para debugging
-        let window = remote.getCurrentWindow()
-        window.toggleDevTools()
-        
-        /* ORIGINAL SECURITY CODE (restaurar después del testing):
-        // SECURITY: Solo permitir DevTools en desarrollo
-        if (isDev) {
-            let window = remote.getCurrentWindow()
-            window.toggleDevTools()
+        if (isDev || ALLOW_DEVTOOLS_IN_PROD) {
+            remote.getCurrentWindow().toggleDevTools()
         } else {
             console.log('%c DevTools deshabilitado en producción', 'color: orange; font-size: 14px;')
         }
-        */
     }
 })

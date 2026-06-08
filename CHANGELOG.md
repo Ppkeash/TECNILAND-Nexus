@@ -2,6 +2,12 @@
 
 Novedades de TECNILAND Nexus.
 
+## v1.1.1 — Junio 2026
+
+- **Arreglo visual:** el aviso de modpack en mantenimiento ahora se ve limpio y
+  ordenado en la lista de modpacks (antes descuadraba la tarjeta y añadía scroll).
+- Ajustes internos de estabilidad.
+
 ## v1.1.0 — Junio 2026
 
 ### 🌟 ¡TECNILAND BEYOND llega pronto!

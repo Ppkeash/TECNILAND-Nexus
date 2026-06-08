@@ -4545,17 +4545,11 @@ input:checked + .toggleSwitchSlider:before {
     text-transform: uppercase;
     letter-spacing: 0.5px;
     text-shadow: 0 0 5px rgba(255, 136, 0, 0.3);
-}
-
-/* Mensaje de mantenimiento mostrado en la tarjeta del modpack. */
-.server-maintenance-msg {
-    flex-basis: 100%;
-    margin-top: 3px;
-    font-size: 10px;
-    font-weight: 600;
-    color: #ffb04d;
-    letter-spacing: 0.3px;
-    text-shadow: 0 0 4px rgba(255, 136, 0, 0.25);
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
 }
 
 /* Modpack en mantenimiento: aspecto bloqueado y no seleccionable. */

@@ -1673,11 +1673,11 @@ async function populateServerListings(){
         
         let maintenanceBadge = ''
         if (underMaintenance) {
-            maintenanceBadge = '<span class="server-badge-maintenance">🔧 En mantenimiento</span>'
             const rawMsg = (ModpackStatusClient.getMaintenanceMessage(serverId) || '').trim()
-            if (rawMsg.length > 0) {
-                maintenanceBadge += `<span class="server-maintenance-msg">${SecurityHelperOverlay.escapeHTML(rawMsg)}</span>`
-            }
+            const label = rawMsg.length > 0
+                ? SecurityHelperOverlay.escapeHTML(rawMsg)
+                : 'En mantenimiento'
+            maintenanceBadge = `<span class="server-badge-maintenance" title="${label}">🔧 ${label}</span>`
         }
 
         htmlString += `<button class="serverListing tecniland-server-card ${installState}${underMaintenance ? ' maintenance' : ''}" servid="${serverId}" ${isSelected ? 'selected' : ''} ${underMaintenance ? 'disabled' : ''}>
