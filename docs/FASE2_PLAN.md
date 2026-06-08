@@ -13,11 +13,16 @@ Estado de Fase 2 a la fecha:
 
 ---
 
-## #10 — Dominio propio para R2 (Nebula + Launcher)
+## #10 — Dominio propio para R2 (OPCIONAL — Nebula + Launcher)
 
-**Problema:** la distribución y todos sus assets se sirven desde la URL pública
-de desarrollo de R2 (`pub-eae2df8eea254247b58a3f40588e2c61.r2.dev`), que
-Cloudflare marca como *rate-limited* y **no apta para producción**.
+> **No es obligatorio.** El setup actual (bucket R2 servido en `pub-…r2.dev/nebula/`)
+> funciona a la escala actual. Esto solo aplica si a futuro hay descarga masiva y
+> el rate-limit de `r2.dev` molesta. El default de `REMOTE_DISTRO_URL` sigue
+> siendo la URL `r2.dev` de siempre; no hay que hacer nada para que funcione.
+
+**Contexto:** la distribución y sus assets se sirven desde la URL pública de
+desarrollo de R2 (`pub-eae2df8eea254247b58a3f40588e2c61.r2.dev`), que Cloudflare
+marca como *rate-limited*.
 
 La URL dev aparece en **dos sitios**:
 1. **Nebula** `.env` → `BASE_URL=...r2.dev/nebula/` → genera las URLs de assets
