@@ -238,10 +238,9 @@ class TecnilandAuthManager {
                 }
             })
             
-            logger.debug('[validateSession] Respuesta del backend:', JSON.stringify(response))
-            logger.debug('[validateSession] response.success:', response?.success)
-            logger.debug('[validateSession] response.data:', response?.data)
-            logger.debug('[validateSession] response.data.valid:', response?.data?.valid)
+            // SECURITY: No loguear la respuesta completa (contiene datos de usuario / PII).
+            // Solo flags booleanos para diagnóstico.
+            logger.debug('[validateSession] response.success:', response?.success, '| valid:', response?.data?.valid)
             
             // El backend responde con estructura: { success: true, data: { valid: true, user: {...} } }
             if (response.success && response.data && response.data.valid) {
@@ -261,9 +260,7 @@ class TecnilandAuthManager {
                 }
             } else {
                 logger.warn('[validateSession] ❌ Backend respondió valid=false o estructura incorrecta')
-                logger.debug('[validateSession] response.success:', response?.success)
-                logger.debug('[validateSession] response.data?.valid:', response?.data?.valid)
-                logger.debug('[validateSession] Respuesta completa:', JSON.stringify(response))
+                logger.debug('[validateSession] response.success:', response?.success, '| valid:', response?.data?.valid)
             }
             
             // Si la validación falló, limpiar sesión
@@ -478,8 +475,6 @@ class TecnilandAuthManager {
                     clientToken: this.yggdrasilClientToken
                 })
             })
-            
-            logger.debug('[validateYggdrasilToken] Respuesta:', response)
             
             // Validate devuelve 204 No Content si es válido
             const isValid = response === null || response.valid !== false
@@ -778,22 +773,6 @@ class TecnilandAuthManager {
             `-javaagent:${injectorPath}=${TecnilandAuthConfig.BASE_URL}`,
             '-Dauthlibinjector.side=client'
         ]
-    }
-    
-    /**
-     * Obtener prefetched metadata en base64 para authlib-injector.
-     * 
-     * @returns {Promise<string|null>} Metadata en base64
-     */
-    async getPrefetchedMetadata() {
-        try {
-            const response = await fetch(TecnilandAuthConfig.BASE_URL)
-            const metadata = await response.json()
-            return Buffer.from(JSON.stringify(metadata)).toString('base64')
-        } catch (err) {
-            logger.warn('No se pudo obtener metadata prefetched:', err.message)
-            return null
-        }
     }
     
     // ==================== Métodos Privados ====================

@@ -29,6 +29,7 @@
     const dl = require('helios-core/dl')
     const java = require('helios-core/java')
     const SkinManager = require('./assets/js/skinmanager')
+    const SkinViewer3DManager = require('./assets/js/skinviewer3d/SkinViewer3DManager')
     const { LoggerUtil } = require('helios-core')
     
     const MojangRestAPI = mojang.MojangRestAPI
@@ -52,6 +53,7 @@
     const DiscordWrapper = require('./assets/js/discordwrapper')
     const ProcessBuilder = require('./assets/js/processbuilder')
     const JavaManager = require('./assets/js/javamanager')
+    const SecurityHelper = require('./assets/js/securityhelper')
     
     // ConfigManager e InstallationManager ya están disponibles globalmente
     // const ConfigManager = require('./assets/js/configmanager')
@@ -349,11 +351,39 @@ document.getElementById('launch_button').addEventListener('click', async e => {
             ConfigManager.save()
         }
         
-        // Usar JavaManager para resolver el Java correcto
+        // ✅ CRITICAL FIX: ALWAYS validate configured Java BEFORE using it
+        // This prevents launching with incompatible Java versions (e.g., Java 24 for Forge 1.20.1)
         const configuredJava = ConfigManager.getJavaExecutable(serverId)
-        const javaResult = await JavaManager.resolveJavaForMinecraft(minecraftVersion, configuredJava)
         
+        loggerLanding.info('═══════════════════════════════════════')
+        loggerLanding.info('🔍 JAVA VALIDATION FOR MINECRAFT ' + minecraftVersion)
+        loggerLanding.info('═══════════════════════════════════════')
+        if (configuredJava) {
+            loggerLanding.info(`📁 Configured Java: ${configuredJava}`)
+        } else {
+            loggerLanding.info('📁 No Java configured - will auto-detect')
+        }
+        
+        let javaResult = await JavaManager.resolveJavaForMinecraft(minecraftVersion, configuredJava)
+        
+        // ⚠️ STRICT VALIDATION: If configured Java is incompatible, FORCE re-detection/download
+        if (configuredJava && !javaResult.success) {
+            loggerLanding.warn('❌ CONFIGURED JAVA IS INCOMPATIBLE!')
+            loggerLanding.warn(`   Path: ${configuredJava}`)
+            loggerLanding.warn(`   ${javaResult.message}`)
+            loggerLanding.info('🔄 FORCING automatic Java detection/download...')
+            
+            // Clear incompatible Java from config
+            ConfigManager.setJavaExecutable(serverId, null)
+            ConfigManager.save()
+            
+            // Re-scan WITHOUT configured Java (force system scan)
+            javaResult = await JavaManager.resolveJavaForMinecraft(minecraftVersion, null)
+        }
+        
+        loggerLanding.info('─────────────────────────────────────')
         loggerLanding.info('Java resolution result:', javaResult)
+        loggerLanding.info('═══════════════════════════════════════')
         
         // ✅ NEOFORGE STRICT: Abort if not Java 17
         if (isNeoForge && javaResult.success && javaResult.majorVersion !== 17) {
@@ -365,21 +395,17 @@ document.getElementById('launch_button').addEventListener('click', async e => {
         
         if (!javaResult.success) {
             // No hay Java compatible, necesitamos descargar
-            loggerLanding.warn(`No compatible Java found: ${javaResult.message}`)
+            loggerLanding.warn(`❌ No compatible Java found: ${javaResult.message}`)
             
-            // Si el usuario tenía Java configurado pero es incompatible, mostrar mensaje especial
-            if (javaResult.configuredJavaIncompatible) {
-                await showJavaIncompatibleOverlay(minecraftVersion, javaResult, serverId)
-            } else {
-                // No hay Java, ofrecer descarga automática
-                const effectiveJavaOptions = JavaManager.generateEffectiveJavaOptions(minecraftVersion)
-                await asyncSystemScanWithJavaManager(effectiveJavaOptions, true, serverId, minecraftVersion)
-            }
+            // Ofrecer descarga automática (sin preguntar, ya limpiamos el incompatible)
+            const effectiveJavaOptions = JavaManager.generateEffectiveJavaOptions(minecraftVersion)
+            loggerLanding.info(`📥 Auto-downloading Java ${effectiveJavaOptions.suggestedMajor} for Minecraft ${minecraftVersion}...`)
+            await asyncSystemScanWithJavaManager(effectiveJavaOptions, true, serverId, minecraftVersion)
         } else {
             // Java encontrado, verificar y actualizar ConfigManager si es necesario
-            if (javaResult.source === 'detected') {
-                // Java auto-detectado, guardarlo en ConfigManager para futuras ejecuciones
-                loggerLanding.info(`Saving auto-detected Java to ConfigManager: ${javaResult.executable}`)
+            if (javaResult.source === 'detected' || !configuredJava) {
+                // Java auto-detectado o no había configurado, guardarlo en ConfigManager para futuras ejecuciones
+                loggerLanding.info(`💾 Saving Java ${javaResult.majorVersion} to ConfigManager: ${javaResult.executable}`)
                 ConfigManager.setJavaExecutable(serverId, javaResult.executable)
                 ConfigManager.save()
             }
@@ -388,7 +414,7 @@ document.getElementById('launch_button').addEventListener('click', async e => {
             toggleLaunchArea(true)
             setLaunchPercentage(0, 100)
             
-            loggerLanding.info(`Using Java ${javaResult.majorVersion} from ${javaResult.source}: ${javaResult.executable}`)
+            loggerLanding.info(`✅ Using Java ${javaResult.majorVersion} from ${javaResult.source}: ${javaResult.executable}`)
             await dlAsync()
         }
     } catch(err) {
@@ -417,16 +443,28 @@ function updateSelectedAccount(authUser){
     if(authUser != null){
         if(authUser.displayName != null){
             username = authUser.displayName
-            // Add offline mode indicator if account is offline
+            // Add account type indicator with appropriate color
             if(authUser.type === 'offline'){
-                username += ' <span style="font-size: 10px; color: #888; font-weight: normal;">(Offline Mode)</span>'
+                username += ' <span style="font-size: 10px; color: #888; font-weight: normal;">(Offline)</span>'
+            } else if(authUser.type === 'tecniland'){
+                username += ' <span style="font-size: 10px; color: #39FF14; font-weight: normal;">(TECNILAND)</span>'
             }
         }
         if(authUser.uuid != null){
-            // Use avatar for offline accounts, body for premium accounts
-            const imageType = authUser.type === 'offline' ? 'avatar' : 'body'
-            document.getElementById('avatarContainer').style.backgroundImage = `url('https://mc-heads.net/${imageType}/${authUser.uuid}/right')`
+            // Use centralized avatar URL function from ConfigManager
+            const avatarUrl = ConfigManager.getAccountAvatarUrl(authUser, 'body')
+            
+            // For TECNILAND accounts, use SkinViewer3DManager to handle fallback to Steve
+            if(authUser.type === 'tecniland'){
+                SkinViewer3DManager.createOrUpdateViewer('avatarContainer', avatarUrl, 'steve')
+            } else {
+                // For other account types, use direct background-image
+                document.getElementById('avatarContainer').style.backgroundImage = `url('${avatarUrl}')`
+            }
         }
+    } else {
+        // No account selected - clear avatar and show placeholder
+        document.getElementById('avatarContainer').style.backgroundImage = ''
     }
     user_text.innerHTML = username
 }
@@ -631,7 +669,7 @@ async function asyncSystemScanWithJavaManager(effectiveJavaOptions, launchAfter 
     toggleLaunchArea(true)
     setLaunchPercentage(0, 100)
     
-    // Primero, intentar detectar Java con JavaManager
+    // Primero, intentar detectar Java con JavaManager (respeta límites min/max)
     if (mcVersion) {
         const javaResult = await JavaManager.resolveJavaForMinecraft(mcVersion, null)
         
@@ -654,9 +692,29 @@ async function asyncSystemScanWithJavaManager(effectiveJavaOptions, launchAfter 
             }
             return
         }
+        
+        // JavaManager dice que NO hay Java compatible - IR DIRECTAMENTE A DESCARGAR
+        // NO usar helios-core fallback porque no respeta límites max de Java
+        loggerLanding.info(`═══════════════════════════════════════════════════════════`)
+        loggerLanding.info(`🔧 JavaManager: No compatible Java found for MC ${mcVersion}`)
+        loggerLanding.info(`📥 DOWNLOADING Java ${effectiveJavaOptions.suggestedMajor} (no fallback to helios-core)`)
+        loggerLanding.info(`═══════════════════════════════════════════════════════════`)
+        
+        setLaunchDetails(Lang.queryJS('landing.systemScan.javaDownloadPrepare'))
+        
+        try {
+            await downloadJavaWithCallback(effectiveJavaOptions, launchAfter, serverId, mcVersion)
+        } catch (err) {
+            loggerLanding.error('Error downloading Java', err)
+            showLaunchFailure(
+                Lang.queryJS('landing.systemScan.javaDownloadFailureTitle'),
+                Lang.queryJS('landing.systemScan.javaDownloadFailureText')
+            )
+        }
+        return
     }
     
-    // Fallback: usar helios-core discovery (para mantener compatibilidad)
+    // Solo usar helios-core si NO tenemos mcVersion (compatibilidad legacy)
     const jvmDetails = await discoverBestJvmInstallation(
         ConfigManager.getDataDirectory(),
         effectiveJavaOptions.supported
@@ -1364,8 +1422,8 @@ async function dlAsync(login = true) {
         }
 
         try {
-            // Build Minecraft process
-            proc = pb.build()
+            // Build Minecraft process (async due to Java validation)
+            proc = await pb.build()
 
             // Notificar al live log viewer que el juego inició
             window.dispatchEvent(new CustomEvent('minecraft-process-started'))
@@ -1649,7 +1707,7 @@ async function initNews(){
         const lN = newsArr[0]
         const cached = ConfigManager.getNewsCache()
         let newHash = await digestMessage(lN.content)
-        let newDate = new Date(lN.date)
+        let newDate = new Date(lN.dateISO || lN.date) // Use ISO date for proper comparison
         let isNew = false
 
         if(cached.date != null && cached.content != null){
@@ -1734,13 +1792,24 @@ document.addEventListener('keydown', (e) => {
  * @param {number} index The article index.
  */
 function displayArticle(articleObject, index){
-    newsArticleTitle.innerHTML = articleObject.title
-    newsArticleTitle.href = articleObject.link
-    newsArticleAuthor.innerHTML = 'by ' + articleObject.author
-    newsArticleDate.innerHTML = articleObject.date
-    newsArticleComments.innerHTML = articleObject.comments
+    // SECURITY: Usar textContent para datos de texto plano
+    newsArticleTitle.textContent = articleObject.title
+    newsArticleTitle.href = '#'
+    newsArticleTitle.onclick = (e) => e.preventDefault() // Disable click
+    newsArticleTitle.style.cursor = 'default' // Remove pointer cursor
+    newsArticleAuthor.textContent = 'by ' + articleObject.author
+    newsArticleDate.textContent = articleObject.date
+    newsArticleComments.textContent = articleObject.comments
     newsArticleComments.href = articleObject.commentsLink
-    newsArticleContentScrollable.innerHTML = '<div id="newsArticleContentWrapper"><div class="newsArticleSpacerTop"></div>' + articleObject.content + '<div class="newsArticleSpacerBot"></div></div>'
+    
+    // SECURITY: Sanitizar contenido HTML antes de inyectar
+    const sanitizedContent = SecurityHelper.sanitizeHTML(articleObject.content, {
+        allowImages: true,
+        allowLinks: true,
+        allowStyles: true
+    })
+    newsArticleContentScrollable.innerHTML = '<div id="newsArticleContentWrapper"><div class="newsArticleSpacerTop"></div>' + sanitizedContent + '<div class="newsArticleSpacerBot"></div></div>'
+    
     Array.from(newsArticleContentScrollable.getElementsByClassName('bbCodeSpoilerButton')).forEach(v => {
         v.onclick = () => {
             const text = v.parentElement.getElementsByClassName('bbCodeSpoilerText')[0]
@@ -1752,15 +1821,28 @@ function displayArticle(articleObject, index){
 }
 
 /**
- * Load news information. During TECNILAND Beta phase, always shows maintenance message.
- * In future production, this will load from RSS feed.
+ * TECNILAND News API Configuration
+ * Endpoint for fetching news from backend (Fly.io production)
  */
-async function loadNews(){
-    // TECNILAND Beta Phase: Always show maintenance message
-    // TODO: Remove this when ready for production and proper RSS feed is configured
-    loggerLanding.debug('TECNILAND Beta: Showing maintenance message.')
+const isDev = require('./assets/js/isdev')
+const NEWS_API_BASE = isDev ? 'http://localhost:3000' : 'https://tecniland-backend.fly.dev'
+const NEWS_API_ENDPOINT = `${NEWS_API_BASE}/api/news`
+const NEWS_CACHE_TTL = 5 * 60 * 1000 // 5 minutes cache
+
+// News cache for performance
+let newsCache = {
+    data: null,
+    timestamp: null
+}
+
+/**
+ * Get fallback news when API is unavailable
+ * @returns {Object} Fallback news object with maintenance message
+ */
+function getFallbackNews() {
     return {
         articles: [{
+            id: 'maintenance',
             link: 'https://github.com/Ppkeash/TECNILAND-Nexus',
             title: Lang.queryJS('landing.news.maintenanceTitle'),
             date: new Date().toLocaleDateString('es-ES', {month: 'short', day: 'numeric', year: 'numeric'}),
@@ -1770,95 +1852,150 @@ async function loadNews(){
             commentsLink: 'https://github.com/Ppkeash/TECNILAND-Nexus/issues'
         }]
     }
+}
 
-    /* PRODUCTION CODE - Uncomment when ready:
-    const distroData = await DistroAPI.getDistribution()
-    
-    // If no RSS configured, show maintenance message
-    if(!distroData.rawDistribution.rss || distroData.rawDistribution.rss === 'https://github.com') {
-        loggerLanding.debug('No RSS feed provided, showing maintenance message.')
+/**
+ * Transform API response to launcher format
+ * @param {Array} apiArticles Articles from backend API
+ * @returns {Array} Transformed articles for UI
+ */
+function transformNewsArticles(apiArticles) {
+    return apiArticles.map(article => {
+        // Format date from ISO to readable format
+        const publishDate = new Date(article.publishedAt)
+        const formattedDate = publishDate.toLocaleDateString('es-ES', {
+            month: 'short', 
+            day: 'numeric', 
+            year: 'numeric'
+        })
+
+        // Build comments text - always show "Ver en la web" to redirect to web panel
+        const commentsText = 'Ver en la web'
+
+        // Build content with cover image if available.
+        // El alt se escapa como defensa en profundidad; igualmente todo el
+        // displayContent pasa por SecurityHelper.sanitizeHTML al renderizar.
+        const displayContent = article.coverImage
+            ? `<img src="${article.coverImage}" class="newsArticleCoverImage" alt="${SecurityHelper.escapeHTML(article.title)}"/>${article.content}`
+            : article.content
+
+        // Build link to news detail (use slug for better URLs)
+        const newsLink = article.link || `${NEWS_API_BASE}/news/${article.slug}`
+        // Link to web panel news section
+        const commentsLink = 'https://tecnilandnex.online/server'
+
         return {
-            articles: [{
-                link: 'https://github.com/Ppkeash/TECNILAND-Nexus',
-                title: Lang.queryJS('landing.news.maintenanceTitle'),
-                date: new Date().toLocaleDateString('es-ES', {month: 'short', day: 'numeric', year: 'numeric'}),
-                author: 'TECNILAND Team',
-                content: Lang.queryJS('landing.news.maintenanceContent'),
-                comments: '0 Comments',
-                commentsLink: 'https://github.com/Ppkeash/TECNILAND-Nexus/issues'
-            }]
+            id: article.id || article.slug,
+            link: newsLink,
+            title: article.title,
+            date: formattedDate,
+            dateISO: article.publishedAt, // Keep ISO format for comparisons
+            author: article.author?.username || 'TECNILAND Team',
+            content: displayContent,
+            comments: commentsText,
+            commentsLink: commentsLink,
+            featured: article.featured || false,
+            views: article.views || 0,
+            slug: article.slug,
+            excerpt: article.excerpt || ''
+        }
+    })
+}
+
+/**
+ * Load news from TECNILAND Backend API.
+ * Fetches news articles from the backend with caching support.
+ * Falls back to maintenance message if API is unavailable.
+ * 
+ * @param {Object} options - Optional parameters
+ * @param {number} options.limit - Number of articles to fetch (default: 10)
+ * @param {boolean} options.featured - Only fetch featured articles
+ * @param {boolean} options.forceRefresh - Bypass cache and fetch fresh data
+ * @returns {Object} News object with articles array
+ */
+async function loadNews(options = {}) {
+    const { limit = 10, featured = false, forceRefresh = false } = options
+
+    loggerLanding.info('[NEWS] Starting news fetch...')
+    loggerLanding.info(`[NEWS] Options: limit=${limit}, featured=${featured}, forceRefresh=${forceRefresh}`)
+
+    // Check cache first (unless force refresh)
+    if (!forceRefresh && newsCache.data && newsCache.timestamp) {
+        const cacheAge = Date.now() - newsCache.timestamp
+        if (cacheAge < NEWS_CACHE_TTL) {
+            loggerLanding.debug('[NEWS] Returning cached news data')
+            return newsCache.data
         }
     }
 
-    const promise = new Promise((resolve, reject) => {
-        
-        const newsFeed = distroData.rawDistribution.rss
-        const newsHost = new URL(newsFeed).origin + '/'
-        $.ajax({
-            url: newsFeed,
-            success: (data) => {
-                const items = $(data).find('item')
-                const articles = []
+    try {
+        // Build API URL with parameters
+        const params = new URLSearchParams()
+        params.append('limit', limit.toString())
+        if (featured) params.append('featured', 'true')
 
-                for(let i=0; i<items.length; i++){
-                // JQuery Element
-                    const el = $(items[i])
+        const apiUrl = `${NEWS_API_ENDPOINT}?${params.toString()}`
+        loggerLanding.info(`[NEWS] Fetching news from: ${apiUrl}`)
 
-                    // Resolve date.
-                    const date = new Date(el.find('pubDate').text()).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: 'numeric'})
-
-                    // Resolve comments.
-                    let comments = el.find('slash\\:comments').text() || '0'
-                    comments = comments + ' Comment' + (comments === '1' ? '' : 's')
-
-                    // Fix relative links in content.
-                    let content = el.find('content\\:encoded').text()
-                    let regex = /src="(?!http:\/\/|https:\/\/)(.+?)"/g
-                    let matches
-                    while((matches = regex.exec(content))){
-                        content = content.replace(`"${matches[1]}"`, `"${newsHost + matches[1]}"`)
-                    }
-
-                    let link   = el.find('link').text()
-                    let title  = el.find('title').text()
-                    let author = el.find('dc\\:creator').text()
-
-                    // Generate article.
-                    articles.push(
-                        {
-                            link,
-                            title,
-                            date,
-                            author,
-                            content,
-                            comments,
-                            commentsLink: link + '#comments'
-                        }
-                    )
-                }
-                resolve({
-                    articles
-                })
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
             },
-            timeout: 2500
-        }).catch(err => {
-            // On error, show maintenance message
-            resolve({
-                articles: [{
-                    link: 'https://github.com/Ppkeash/TECNILAND-Nexus',
-                    title: Lang.queryJS('landing.news.maintenanceTitle'),
-                    date: new Date().toLocaleDateString('es-ES', {month: 'short', day: 'numeric', year: 'numeric'}),
-                    author: 'TECNILAND Team',
-                    content: Lang.queryJS('landing.news.maintenanceContent'),
-                    comments: '0 Comments',
-                    commentsLink: 'https://github.com/Ppkeash/TECNILAND-Nexus/issues'
-                }]
-            })
+            timeout: 5000
         })
-    })
 
-    return await promise
-    */
+        loggerLanding.info(`[NEWS] Response status: ${response.status}`)
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        }
+
+        const data = await response.json()
+        loggerLanding.info('[NEWS] Response data:', JSON.stringify(data).substring(0, 200) + '...')
+
+        if (data.success && data.data?.articles?.length > 0) {
+            // Transform API response to launcher format
+            const transformedArticles = transformNewsArticles(data.data.articles)
+            
+            const newsResult = {
+                articles: transformedArticles,
+                total: data.data.total || transformedArticles.length,
+                hasMore: data.data.hasMore || false
+            }
+
+            // Update cache
+            newsCache = {
+                data: newsResult,
+                timestamp: Date.now()
+            }
+
+            loggerLanding.info(`[NEWS] ✅ Successfully loaded ${transformedArticles.length} articles from API`)
+            return newsResult
+        } else if (data.success && data.data?.articles?.length === 0) {
+            // API is working but there are no published articles yet
+            loggerLanding.warn('[NEWS] ⚠️ API responded successfully but no articles available')
+            return getFallbackNews()
+        } else {
+            loggerLanding.warn('[NEWS] API returned unexpected response format, showing fallback')
+            return getFallbackNews()
+        }
+
+    } catch (error) {
+        loggerLanding.error('[NEWS] ❌ Failed to fetch news from API:', error.message)
+        loggerLanding.error('[NEWS] Error stack:', error.stack)
+        
+        // If we have cached data (even expired), use it as fallback
+        if (newsCache.data) {
+            loggerLanding.warn('[NEWS] Using expired cache as fallback')
+            return newsCache.data
+        }
+
+        // Ultimate fallback: maintenance message
+        loggerLanding.warn('[NEWS] Showing maintenance message fallback')
+        return getFallbackNews()
+    }
 }
 
 /**
@@ -1890,5 +2027,34 @@ window.refreshServerStatus = refreshServerStatus
 window.refreshLandingForSelectedServer = refreshLandingForSelectedServer
 window.initNews = initNews
 window.reloadNews = reloadNews
+
+// Initialize TECNILAND Auth UI to load and validate session on startup
+try {
+    const TecnilandAuthUI = require('./assets/js/tecnilandauth/TecnilandAuthUI')
+    if (TecnilandAuthUI && typeof TecnilandAuthUI.init === 'function') {
+        loggerLanding.info('[LANDING] Inicializando TecnilandAuthUI...')
+        TecnilandAuthUI.init()
+    } else {
+        loggerLanding.warn('[LANDING] TecnilandAuthUI no disponible o sin método init')
+    }
+} catch (err) {
+    loggerLanding.error('[LANDING] Error al cargar TecnilandAuthUI:', err)
+}
+
+// Inicializar SkinViewer3D para el avatar del landing
+loggerLanding.info('[LANDING] Preparando SkinViewer3D...')
+setTimeout(() => {
+    try {
+        const SkinViewer3DLanding = require('./assets/js/skinviewer3d/SkinViewer3DLanding')
+        if (SkinViewer3DLanding && typeof SkinViewer3DLanding.initLandingSkinViewer === 'function') {
+            loggerLanding.info('[LANDING] Inicializando SkinViewer3D...')
+            SkinViewer3DLanding.initLandingSkinViewer()
+        } else {
+            loggerLanding.warn('[LANDING] SkinViewer3DLanding no disponible')
+        }
+    } catch (err) {
+        loggerLanding.error('[LANDING] Error al cargar SkinViewer3DLanding:', err.message)
+    }
+}, 2000)
 
 })() // End of IIFE

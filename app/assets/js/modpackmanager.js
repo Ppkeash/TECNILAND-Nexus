@@ -17,28 +17,6 @@ const { DistroAPI } = require('./distromanager')
 const logger = LoggerUtil.getLogger('ModpackManager')
 
 // ============================================================================
-// Constants
-// ============================================================================
-
-/**
- * Files to preserve during updates (user configs)
- */
-const PRESERVED_FILES = [
-    'options.txt',
-    'config/**',
-    'defaultconfigs/**',
-    'saves/**',
-    'screenshots/**',
-    'resourcepacks/**',
-    'shaderpacks/**'
-]
-
-/**
- * Minimum free disk space multiplier (10% buffer)
- */
-const DISK_SPACE_BUFFER = 1.1
-
-// ============================================================================
 // State
 // ============================================================================
 
@@ -182,26 +160,6 @@ function calculateRawModulesSize(modules) {
 }
 
 /**
- * Calculate total size of a modpack server.
- * 
- * @param {string} serverId - The server ID.
- * @returns {Promise<number>} Total size in bytes.
- */
-async function calculateModpackSize(serverId) {
-    const server = await getServerById(serverId)
-    if (!server) {
-        logger.warn(`Server not found for size calculation: ${serverId}`)
-        return 0
-    }
-    
-    const modules = server.modules || server.rawServer?.modules || []
-    const size = calculateModulesSize(modules)
-    
-    logger.debug(`Modpack ${serverId} size: ${formatBytes(size)}`)
-    return size
-}
-
-/**
  * Format bytes to human-readable string.
  * 
  * @param {number} bytes - Size in bytes.
@@ -218,57 +176,6 @@ function formatBytes(bytes, decimals = 2) {
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i]
-}
-
-// ============================================================================
-// Disk Space
-// ============================================================================
-
-/**
- * Get free disk space for a path.
- * Uses check-disk-space if available, falls back to fs.statfs.
- * 
- * @param {string} targetPath - Path to check.
- * @returns {Promise<number>} Free space in bytes.
- */
-async function getFreeDiskSpace(targetPath) {
-    try {
-        // Try to use check-disk-space package
-        const checkDiskSpace = require('check-disk-space').default
-        const diskSpace = await checkDiskSpace(targetPath)
-        return diskSpace.free
-    } catch (err) {
-        logger.warn('check-disk-space not available, using fallback')
-        
-        // Fallback: try fs.statfs (Node 18+)
-        try {
-            const stats = await fs.statfs(targetPath)
-            return stats.bfree * stats.bsize
-        } catch (statErr) {
-            logger.warn('fs.statfs not available, assuming enough space')
-            return Number.MAX_SAFE_INTEGER
-        }
-    }
-}
-
-/**
- * Check if there's enough disk space for installation.
- * 
- * @param {number} requiredSize - Required size in bytes.
- * @returns {Promise<{hasSpace: boolean, freeSpace: number, requiredSpace: number}>}
- */
-async function checkDiskSpace(requiredSize) {
-    const dataDir = ConfigManager.getDataDirectory()
-    const freeSpace = await getFreeDiskSpace(dataDir)
-    const requiredWithBuffer = Math.ceil(requiredSize * DISK_SPACE_BUFFER)
-    
-    return {
-        hasSpace: freeSpace >= requiredWithBuffer,
-        freeSpace: freeSpace,
-        requiredSpace: requiredWithBuffer,
-        freeFormatted: formatBytes(freeSpace),
-        requiredFormatted: formatBytes(requiredWithBuffer)
-    }
 }
 
 // ============================================================================
@@ -448,43 +355,6 @@ async function getAllModpackStates() {
 }
 
 // ============================================================================
-// Helpers - Preserved Files (solo para referencia futura)
-// ============================================================================
-
-// ============================================================================
-// Helpers - Preserved Files (solo para referencia futura)
-// ============================================================================
-
-/**
- * Check if a file path matches preserved patterns.
- * Usado internamente - los usuarios no necesitan actualizar/reparar manualmente.
- * Helios FullRepair maneja esto automáticamente.
- * 
- * @param {string} filePath - Relative file path.
- * @returns {boolean} True if should be preserved.
- */
-function isPreservedFile(filePath) {
-    const normalizedPath = filePath.replace(/\\/g, '/')
-    
-    for (const pattern of PRESERVED_FILES) {
-        if (pattern.includes('**')) {
-            // Glob pattern: check if path starts with base
-            const base = pattern.replace('/**', '')
-            if (normalizedPath.startsWith(base + '/') || normalizedPath === base) {
-                return true
-            }
-        } else {
-            // Exact match
-            if (normalizedPath === pattern) {
-                return true
-            }
-        }
-    }
-    
-    return false
-}
-
-// ============================================================================
 // Uninstall
 // ============================================================================
 
@@ -558,22 +428,14 @@ module.exports = {
     refreshDistribution,
     getServers,
     getServerById,
-    
+
     // Size
-    calculateModpackSize,
     formatBytes,
-    
-    // Disk space
-    getFreeDiskSpace,
-    checkDiskSpace,
-    
+
     // State
     getModpackState,
     getAllModpackStates,
-    
+
     // Operations (solo las que usamos realmente)
-    uninstallModpack,
-    
-    // Utils
-    isPreservedFile
+    uninstallModpack
 }
