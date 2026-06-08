@@ -4546,6 +4546,7 @@ input:checked + .toggleSwitchSlider:before {
     letter-spacing: 0.5px;
     text-shadow: 0 0 5px rgba(255, 136, 0, 0.3);
     max-width: 100%;
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
