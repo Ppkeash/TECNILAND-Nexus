@@ -25,15 +25,30 @@ log_errores*.txt
 
 # Development files
 distribution-local.json
+dev-app-update.yml
 test-results.json
 test-loaders.js
 test-forge-args.js
 
-# Documentation (excluded from repo)
-docs/
-RELEASE_NOTES_*.md
-STATUS_SUMMARY.md
-GITHUB_RELEASE_INSTRUCTIONS.md
+# Test files (NUNCA subir a producción)
+test-*.js
+test-*.html
+test-*.json
+test-*.png
+scripts_tests/
+
+# Mensajes internos/desarrollo (NO SUBIR)
+MENSAJE_*.md
+PROMPTS_*.md
+DIAGNOSTICO_*.md
+ANALISIS_*.md
+VALIDACION_*.md
+*_SESION_*.md
+RESUMEN_*.md
+
+# Documentation interno (excluir del repo público)
+docs/archive/
+DOCS_INDEX.md
 
 # OS-specific
 .DS_Store
@@ -47,3 +62,57 @@ temp/
 
 # Electron
 *.asar
+
+# ============================================
+# SEGURIDAD - NUNCA SUBIR ESTOS ARCHIVOS
+# ============================================
+
+# Configuración local de entorno
+.env
+.env.local
+.env.development
+.env.production
+*.local.json
+config.local.json
+
+# Credenciales y secretos
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials/
+
+# Tokens y autenticación
+**/auth-tokens.json
+**/session-cache.json
+
+# Base de datos local
+*.db
+*.sqlite
+*.sqlite3
+
+# Backups que pueden contener datos sensibles
+backups/
+*.backup
+
+# Certificados SSL/TLS
+*.crt
+*.cer
+
+# Archivos de firma de código
+*.codesign
+*.signature
+
+# Cache de skins/texturas con datos de usuarios
+skin-cache/
+texture-cache/
+
+# Dumps de memoria o errores
+*.dmp
+*.dump
+crash-reports/
+
+# Configuración de CI/CD con secretos
+.github/workflows/*.secrets
+.gitlab-ci.local.yml
