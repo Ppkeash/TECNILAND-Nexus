@@ -4329,10 +4329,12 @@ input:checked + .toggleSwitchSlider:before {
 #serverSelectListScrollable,
 #installationSelectListScrollable,
 #accountSelectListScrollable {
-    padding: 0px 5px;
+    padding: 0px;
     overflow-y: auto;
+    overflow-x: hidden;
     max-height: 220px;
     width: 450px;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     align-items: center;
