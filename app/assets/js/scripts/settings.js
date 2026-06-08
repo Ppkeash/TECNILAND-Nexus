@@ -696,6 +696,281 @@ document.getElementById('settingsAddOfflineAccount').onclick = (e) => {
     })
 }
 
+// =============================================================================
+// TECNILAND Account Management
+// =============================================================================
+
+// TECNILAND Auth - wrap in try-catch to handle if already loaded
+let TecnilandAuthUI, TecnilandAuthManager
+try {
+    TecnilandAuthUI = require('./assets/js/tecnilandauth/TecnilandAuthUI')
+    TecnilandAuthManager = require('./assets/js/tecnilandauth/TecnilandAuthManager')
+} catch(e) {
+    console.warn('TECNILAND Auth modules load issue:', e.message)
+}
+const tecnilandLogger = LoggerUtil.getLogger('TECNILAND Account')
+
+// Bind the add TECNILAND account button.
+document.getElementById('settingsAddTecnilandAccount').onclick = (e) => {
+    if (!TecnilandAuthUI) {
+        tecnilandLogger.error('TecnilandAuthUI not loaded')
+        return
+    }
+    tecnilandLogger.info('Opening TECNILAND login from settings (add account button)')
+    TecnilandAuthUI.showLoginOverlay(
+        // onSuccess
+        () => {
+            tecnilandLogger.info('TECNILAND account added successfully')
+            prepareSettings()
+        },
+        // onCancel
+        () => {
+            tecnilandLogger.info('TECNILAND login cancelled')
+        }
+    )
+}
+
+// Initialize TECNILAND UI when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    if (TecnilandAuthUI && typeof TecnilandAuthUI.init === 'function') {
+        TecnilandAuthUI.init()
+    } else {
+        console.warn('TecnilandAuthUI not available or init method missing')
+    }
+})
+
+// Bind TECNILAND login button (from settings logged-out panel)
+const tecnilandLoginBtn = document.getElementById('tecnilandAccountLoginBtn')
+if (tecnilandLoginBtn) {
+    tecnilandLoginBtn.onclick = (e) => {
+        if (!TecnilandAuthUI) {
+            tecnilandLogger.error('TecnilandAuthUI not loaded')
+            return
+        }
+        tecnilandLogger.info('Opening TECNILAND login overlay from settings')
+        TecnilandAuthUI.showLoginOverlay(
+            // onSuccess
+            () => {
+                tecnilandLogger.info('TECNILAND login successful')
+                prepareSettings()
+            },
+            // onCancel
+            () => {
+                tecnilandLogger.info('TECNILAND login cancelled')
+            }
+        )
+    }
+}
+
+// Bind TECNILAND logout button
+const tecnilandLogoutBtn = document.getElementById('tecnilandAccountLogoutBtn')
+if (tecnilandLogoutBtn) {
+    tecnilandLogoutBtn.onclick = async (e) => {
+        tecnilandLogger.info('Logging out from TECNILAND account')
+        
+        try {
+            await TecnilandAuthManager.logout()
+            tecnilandLogger.info('TECNILAND logout successful')
+            
+            // Remove account from config
+            const accounts = ConfigManager.getTecnilandAccounts()
+            for (const acc of accounts) {
+                ConfigManager.removeAuthAccount(acc.uuid)
+            }
+            ConfigManager.setTecnilandSession(null)
+            ConfigManager.save()
+            
+            prepareSettings()
+        } catch (err) {
+            tecnilandLogger.error('TECNILAND logout error:', err)
+            setOverlayContent(
+                'Error al Cerrar Sesión',
+                'No se pudo cerrar la sesión: ' + (err.message || 'Error desconocido'),
+                'OK'
+            )
+            setOverlayHandler(() => toggleOverlay(false))
+            toggleOverlay(true)
+        }
+    }
+}
+
+// Bind TECNILAND skin upload
+const tecnilandSkinInput = document.getElementById('tecnilandSkinUploadInput')
+const tecnilandSkinUploadBtn = document.getElementById('tecnilandSkinUploadBtn')
+
+if (tecnilandSkinUploadBtn && tecnilandSkinInput) {
+    tecnilandSkinUploadBtn.onclick = () => {
+        tecnilandSkinInput.click()
+    }
+    
+    tecnilandSkinInput.onchange = async (e) => {
+        const file = e.target.files[0]
+        if (!file) return
+        
+        // Validate file
+        if (!file.type.startsWith('image/png')) {
+            setOverlayContent(
+                'Archivo Inválido',
+                'Por favor selecciona un archivo PNG válido.',
+                'OK'
+            )
+            setOverlayHandler(() => toggleOverlay(false))
+            toggleOverlay(true)
+            return
+        }
+        
+        if (file.size > 2 * 1024 * 1024) { // 2MB max
+            setOverlayContent(
+                'Archivo Muy Grande',
+                'El archivo de skin debe ser menor a 2MB.',
+                'OK'
+            )
+            setOverlayHandler(() => toggleOverlay(false))
+            toggleOverlay(true)
+            return
+        }
+        
+        const modelSelect = document.getElementById('tecnilandSkinModelSelect')
+        const model = modelSelect ? modelSelect.value : 'steve'
+        
+        tecnilandLogger.info('Uploading skin with model:', model)
+        
+        // Show loading overlay
+        setOverlayContent(
+            'Subiendo Skin...',
+            'Por favor espera mientras se sube tu skin.',
+            null
+        )
+        toggleOverlay(true, false)
+        
+        try {
+            const result = await TecnilandAuthManager.uploadSkin(file, model)
+            
+            if (result.success) {
+                tecnilandLogger.info('Skin uploaded successfully')
+                
+                // Refresh avatar en toda la UI (landing, settings, etc.)
+                const currentUser = TecnilandAuthManager.getCurrentUser()
+                if (TecnilandAuthUI && typeof TecnilandAuthUI.refreshAvatar === 'function') {
+                    TecnilandAuthUI.refreshAvatar(currentUser?.uuid)
+                }
+                
+                // Forzar actualización del landing si esta es la cuenta seleccionada
+                const selectedAccount = ConfigManager.getSelectedAccount()
+                if (selectedAccount && selectedAccount.type === 'tecniland' && selectedAccount.uuid === currentUser?.uuid) {
+                    // updateSelectedAccount está en landing.js
+                    if (typeof updateSelectedAccount === 'function') {
+                        updateSelectedAccount(selectedAccount)
+                    }
+                }
+                
+                // Refrescar la sección de cuenta TECNILAND en settings
+                prepareTecnilandAccountSection()
+                
+                // Refresh del viewer 3D si existe
+                if (window.refreshSkinViewer3D) {
+                    window.refreshSkinViewer3D()
+                }
+                
+                setOverlayContent(
+                    '¡Skin Actualizada!',
+                    'Tu skin ha sido actualizada correctamente.',
+                    'OK'
+                )
+                setOverlayHandler(() => toggleOverlay(false))
+            } else {
+                throw new Error(result.error || 'Error desconocido')
+            }
+        } catch (err) {
+            tecnilandLogger.error('Skin upload error:', err)
+            setOverlayContent(
+                'Error al Subir Skin',
+                err.message || 'No se pudo subir la skin.',
+                'OK'
+            )
+            setOverlayHandler(() => toggleOverlay(false))
+        }
+        
+        // Clear input
+        tecnilandSkinInput.value = ''
+    }
+}
+
+// Bind TECNILAND skin delete
+const tecnilandSkinDeleteBtn = document.getElementById('tecnilandSkinDeleteBtn')
+if (tecnilandSkinDeleteBtn) {
+    tecnilandSkinDeleteBtn.onclick = async () => {
+        tecnilandLogger.info('Deleting TECNILAND skin')
+        
+        setOverlayContent(
+            '¿Eliminar Skin?',
+            '¿Estás seguro de que quieres eliminar tu skin actual?',
+            'Eliminar',
+            'Cancelar'
+        )
+        setOverlayHandler(() => {
+            toggleOverlay(false)
+            
+            // Proceed with deletion
+            TecnilandAuthManager.deleteSkin().then(result => {
+                if (result.success) {
+                    tecnilandLogger.info('Skin deleted successfully')
+                    
+                    // Refrescar avatares y actualizar panel de cuentas
+                    const currentUser = TecnilandAuthManager.getCurrentUser()
+                    if (currentUser) {
+                        if (TecnilandAuthUI && typeof TecnilandAuthUI.refreshAvatar === 'function') {
+                            // Pasar null para forzar fallback a default
+                            TecnilandAuthUI.refreshAvatar(currentUser.uuid)
+                        }
+                        
+                        // Actualizar hub principal si esta es la cuenta seleccionada
+                        const selectedAccount = ConfigManager.getSelectedAccount()
+                        if (selectedAccount && selectedAccount.uuid === currentUser.uuid) {
+                            if (typeof updateSelectedAccount === 'function') {
+                                updateSelectedAccount(selectedAccount)
+                            }
+                        }
+                    }
+                    
+                    // Forzar renderizado de Steve/Alex default en 3D si está habilitado
+                    if (window.refreshSkinViewer3D) {
+                        window.refreshSkinViewer3D()
+                    }
+                    
+                    // Refrescar lista de cuentas
+                    prepareSettings()
+                    
+                    setOverlayContent(
+                        'Skin Eliminada',
+                        'Tu skin ha sido eliminada. Se usará la skin por defecto.',
+                        'OK'
+                    )
+                    setOverlayHandler(() => toggleOverlay(false))
+                    toggleOverlay(true)
+                } else {
+                    throw new Error(result.error)
+                }
+            }).catch(err => {
+                tecnilandLogger.error('Skin delete error:', err)
+                setOverlayContent(
+                    'Error al Eliminar',
+                    err.message || 'No se pudo eliminar la skin.',
+                    'OK'
+                )
+                setOverlayHandler(() => toggleOverlay(false))
+                toggleOverlay(true)
+            })
+        })
+        setDismissHandler(() => toggleOverlay(false))
+        toggleOverlay(true)
+    }
+}
+
+// =============================================================================
+// END TECNILAND Account Management
+// =============================================================================
+
 // Bind reply for Microsoft Login.
 ipcRenderer.on(MSFT_OPCODE.REPLY_LOGIN, (_, ...arguments_) => {
     if (arguments_[0] === MSFT_REPLY_TYPE.ERROR) {
@@ -856,6 +1131,35 @@ function processLogOut(val, isLastAccount){
         switchView(getCurrentView(), VIEWS.waiting, 500, 500, () => {
             ipcRenderer.send(MSFT_OPCODE.OPEN_LOGOUT, uuid, isLastAccount)
         })
+    } else if(targetAcc.type === 'tecniland') {
+        // Handle TECNILAND account logout
+        TecnilandAuthManager.logout().then(() => {
+            ConfigManager.removeAuthAccount(uuid)
+            ConfigManager.setTecnilandSession(null)
+            ConfigManager.save()
+            
+            if(!isLastAccount && uuid === prevSelAcc.uuid){
+                const selAcc = ConfigManager.getSelectedAccount()
+                refreshAuthAccountSelected(selAcc.uuid)
+                updateSelectedAccount(selAcc)
+                validateSelectedAccount()
+            }
+            if(isLastAccount) {
+                loginOptionsCancelEnabled(false)
+                loginOptionsViewOnLoginSuccess = VIEWS.settings
+                loginOptionsViewOnLoginCancel = VIEWS.loginOptions
+                switchView(getCurrentView(), VIEWS.loginOptions)
+            }
+        }).catch(err => {
+            tecnilandLogger.error('Error during TECNILAND logout:', err)
+            // Still remove account locally even if remote logout fails
+            ConfigManager.removeAuthAccount(uuid)
+            ConfigManager.setTecnilandSession(null)
+            ConfigManager.save()
+        })
+        $(parent).fadeOut(250, () => {
+            parent.remove()
+        })
     } else if(targetAcc.type === 'offline') {
         // Handle offline account logout
         AuthManager.removeOfflineAccount(uuid).then(() => {
@@ -996,6 +1300,7 @@ function populateAuthAccounts(){
     let microsoftAuthAccountStr = ''
     let mojangAuthAccountStr = ''
     let offlineAuthAccountStr = ''
+    let tecnilandAuthAccountStr = ''
 
     authKeys.forEach((val) => {
         const acc = authAccounts[val]
@@ -1015,19 +1320,25 @@ function populateAuthAccounts(){
             accountTypeBadge = '<span class="settingsAuthAccountBadge badgeOffline">Offline</span>'
             // Usar skin local si existe, sino fallback a mc-heads
             accountImage = SkinManager.getSkinDisplayUrl(acc.uuid, 'offline')
-            // Añadir botón de editar skin para cuentas offline
-            skinButton = `<button class="settingsAuthAccountSkin" data-uuid="${acc.uuid}" title="${Lang.queryJS('settings.skinEditor.editSkinTooltip')}">
+            // NO hay botón de skin para cuentas offline (solo TECNILAND tiene gestión de skins)
+        } else if(acc.type === 'tecniland') {
+            accountTypeBadge = '<span class="settingsAuthAccountBadge badgeTecniland">TECNILAND</span>'
+            // Para TECNILAND, usar placeholder transparente - el avatar real se renderizará después con 2D
+            // Esto evita mostrar imagen rota (404) mientras se carga el render 2D
+            accountImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+            // Añadir botón de gestionar skin SOLO para TECNILAND
+            skinButton = `<button class="settingsAuthAccountSkin settingsTecnilandSkin" data-uuid="${acc.uuid}" title="${Lang.queryJS('settings.skinEditor.editSkinTooltip') || 'Gestionar Skin'}">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                     <circle cx="12" cy="7" r="4"></circle>
                 </svg>
-                <span>${Lang.queryJS('settings.skinEditor.skinButton')}</span>
+                <span>${Lang.queryJS('settings.skinEditor.skinButton') || 'Skin'}</span>
             </button>`
         }
 
         const accHtml = `<div class="settingsAuthAccount" uuid="${acc.uuid}" data-type="${acc.type}">
             <div class="settingsAuthAccountLeft">
-                <img class="settingsAuthAccountImage" alt="${acc.displayName}" src="${accountImage}">
+                <img class="settingsAuthAccountImage${acc.type === 'tecniland' ? ' tecniland-account-avatar' : ''}" alt="${acc.displayName}" src="${accountImage}">
             </div>
             <div class="settingsAuthAccountRight">
                 <div class="settingsAuthAccountDetails">
@@ -1054,6 +1365,8 @@ function populateAuthAccounts(){
             microsoftAuthAccountStr += accHtml
         } else if(acc.type === 'offline') {
             offlineAuthAccountStr += accHtml
+        } else if(acc.type === 'tecniland') {
+            tecnilandAuthAccountStr += accHtml
         } else {
             mojangAuthAccountStr += accHtml
         }
@@ -1063,12 +1376,82 @@ function populateAuthAccounts(){
     settingsCurrentMicrosoftAccounts.innerHTML = microsoftAuthAccountStr
     settingsCurrentMojangAccounts.innerHTML = mojangAuthAccountStr
     
-    // Add offline accounts section if there are offline accounts
-    if(offlineAuthAccountStr !== '') {
-        const offlineContainer = document.getElementById('settingsCurrentOfflineAccounts')
-        if(offlineContainer) {
-            offlineContainer.innerHTML = offlineAuthAccountStr
-        }
+    // Add offline accounts section
+    const offlineContainer = document.getElementById('settingsCurrentOfflineAccounts')
+    if(offlineContainer) {
+        offlineContainer.innerHTML = offlineAuthAccountStr
+    }
+    
+    // Add TECNILAND accounts section
+    const tecnilandContainer = document.getElementById('settingsCurrentTecnilandAccounts')
+    if(tecnilandContainer) {
+        tecnilandContainer.innerHTML = tecnilandAuthAccountStr
+        
+        // Renderizar body 2D para cada cuenta TECNILAND
+        renderTecnilandAccountAvatars(tecnilandContainer)
+    }
+}
+
+/**
+ * Renderiza los avatares 2D del cuerpo para cuentas TECNILAND
+ * @param {HTMLElement} container - Contenedor de las cuentas TECNILAND
+ */
+function renderTecnilandAccountAvatars(container) {
+    try {
+        const SkinRenderer2D = require('./assets/js/skinviewer3d/SkinRenderer2D')
+        const avatarImages = container.querySelectorAll('.tecniland-account-avatar')
+        
+        // Skin de Steve por defecto local (assets/images/steve.png)
+        const DEFAULT_STEVE_SKIN = SkinRenderer2D.getSteveDefault()
+        
+        avatarImages.forEach((imgEl, index) => {
+            const accountDiv = imgEl.closest('.settingsAuthAccount')
+            if (!accountDiv) return
+            
+            const uuid = accountDiv.getAttribute('uuid')
+            if (!uuid) return
+            
+            let skinUrl = TecnilandAuthManager.getSkinUrl(uuid)
+            
+            // Crear contenedor para el render 2D
+            const renderContainer = document.createElement('div')
+            renderContainer.className = 'skin-render-container'
+            renderContainer.id = `tecnilandAvatar2D_${index}`
+            renderContainer.style.width = '80px'
+            renderContainer.style.height = '115px'
+            renderContainer.style.overflow = 'hidden'
+            
+            // Ocultar la imagen original y reemplazar con el render
+            imgEl.style.display = 'none'
+            imgEl.parentElement.insertBefore(renderContainer, imgEl)
+            
+            // Intentar renderizar skin personalizada del backend
+            // Si falla (404 o error), automáticamente usar Steve por defecto
+            const tryRenderSkin = async () => {
+                try {
+                    if (!skinUrl || skinUrl.includes('profile.svg')) {
+                        // No hay URL válida, usar Steve directamente
+                        await SkinRenderer2D.renderToContainer(`tecnilandAvatar2D_${index}`, DEFAULT_STEVE_SKIN, 5)
+                    } else {
+                        // Intentar cargar skin personalizada con cache-busting
+                        const skinWithTimestamp = skinUrl + '?t=' + Date.now()
+                        await SkinRenderer2D.renderToContainer(`tecnilandAvatar2D_${index}`, skinWithTimestamp, 5)
+                    }
+                } catch (err) {
+                    // Si falla (404, CORS, etc.), usar Steve por defecto - flujo normal
+                    console.debug('[Settings] Sin skin personalizada para UUID ' + uuid + ', usando Steve')
+                    try {
+                        await SkinRenderer2D.renderToContainer(`tecnilandAvatar2D_${index}`, DEFAULT_STEVE_SKIN, 5)
+                    } catch (fallbackErr) {
+                        console.error('[Settings] Error fatal renderizando Steve default:', fallbackErr)
+                    }
+                }
+            }
+            
+            tryRenderSkin()
+        })
+    } catch (err) {
+        console.error('[Settings] Error renderizando avatares TECNILAND 2D:', err)
     }
 }
 
@@ -1080,6 +1463,19 @@ function prepareAccountsTab() {
     bindAuthAccountSelect()
     bindAuthAccountLogOut()
     bindAuthAccountSkinButtons()
+    prepareTecnilandAccountSection()
+}
+
+/**
+ * Prepare the TECNILAND account section in settings.
+ * Nota: Las cuentas TECNILAND ahora se renderizan junto con las demás cuentas
+ * en populateAuthAccounts(). Esta función se mantiene por compatibilidad pero
+ * los avatares 2D se renderizan en renderTecnilandAccountAvatars().
+ */
+function prepareTecnilandAccountSection() {
+    // Los avatares TECNILAND ahora se renderizan en populateAuthAccounts()
+    // via renderTecnilandAccountAvatars()
+    // Esta función se mantiene por compatibilidad con el flujo existente
 }
 
 // ==================== SKIN EDITOR ====================
@@ -1090,21 +1486,231 @@ let skinEditorState = {
     username: null,
     originalSkinPath: null,
     pendingSkinPath: null,
-    pendingModel: 'classic',
+    pendingModel: 'steve',
     hasChanges: false
 }
 
 /**
- * Bind click handlers for skin edit buttons on offline accounts.
+ * Bind click handlers for skin edit buttons on accounts.
+ * Supports both offline accounts (local skin) and TECNILAND accounts (server skin).
  */
 function bindAuthAccountSkinButtons() {
     const skinButtons = document.querySelectorAll('.settingsAuthAccountSkin')
     skinButtons.forEach(btn => {
+        const uuid = btn.getAttribute('data-uuid')
+        const account = ConfigManager.getAuthAccount(uuid)
+        
+        // Para cuentas TECNILAND, verificar que la sesión esté validada
+        if (account && account.type === 'tecniland') {
+            const isLoggedIn = TecnilandAuthManager.isLoggedIn()
+            if (!isLoggedIn) {
+                btn.disabled = true
+                btn.style.opacity = '0.5'
+                btn.style.cursor = 'not-allowed'
+                btn.title = 'Sesión en validación, espera un momento...'
+            }
+        }
+        
         btn.onclick = () => {
-            const uuid = btn.getAttribute('data-uuid')
-            openSkinEditor(uuid)
+            if (account && account.type === 'tecniland') {
+                // For TECNILAND accounts, open the TECNILAND skin manager
+                openTecnilandSkinManager(uuid)
+            } else if (account && account.type === 'offline') {
+                // For offline accounts, use the local skin editor
+                openSkinEditor(uuid)
+            }
         }
     })
+}
+
+/**
+ * Open the TECNILAND skin manager for uploading/deleting skins on the server.
+ * @param {string} uuid - UUID of the TECNILAND account
+ */
+async function openTecnilandSkinManager(uuid) {
+    const account = ConfigManager.getAuthAccount(uuid)
+    if (!account || account.type !== 'tecniland') {
+        return
+    }
+
+    // Show a simple file picker overlay for TECNILAND skins
+    // Create a temporary file input for skin upload
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/png'
+    input.style.display = 'none'
+    document.body.appendChild(input)
+
+    // Create overlay with options
+    setOverlayContent(
+        Lang.queryJS('settings.skinEditor.tecnilandTitle') || 'Gestionar Skin de TECNILAND',
+        Lang.queryJS('settings.skinEditor.tecnilandDescription') || `Selecciona una opción para la cuenta ${account.displayName}`,
+        Lang.queryJS('settings.skinEditor.uploadSkin') || 'Subir Nueva Skin',
+        Lang.queryJS('settings.skinEditor.deleteSkin') || 'Eliminar Skin'
+    )
+    
+    setOverlayHandler(async () => {
+        toggleOverlay(false)
+        // Upload skin
+        input.click()
+    })
+    
+    setDismissHandler(async () => {
+        toggleOverlay(false)
+        // Delete skin
+        setOverlayContent(
+            Lang.queryJS('settings.skinEditor.confirmDeleteTitle') || 'Confirmar Eliminación',
+            Lang.queryJS('settings.skinEditor.confirmDeleteMessage') || '¿Estás seguro de que quieres eliminar tu skin?',
+            Lang.queryJS('settings.skinEditor.confirmDeleteButton') || 'Sí, Eliminar',
+            Lang.queryJS('settings.skinEditor.cancelButton') || 'Cancelar'
+        )
+        setOverlayHandler(async () => {
+            toggleOverlay(false)
+            try {
+                await TecnilandAuthManager.deleteSkin()
+                tecnilandLogger.info('TECNILAND skin deleted successfully')
+                prepareSettings()
+                
+                // Actualizar hub principal si esta es la cuenta seleccionada
+                const selectedAccount = ConfigManager.getSelectedAccount()
+                if (selectedAccount && selectedAccount.type === 'tecniland') {
+                    if (typeof updateSelectedAccount === 'function') {
+                        updateSelectedAccount(selectedAccount)
+                    }
+                }
+                
+                setOverlayContent(
+                    Lang.queryJS('settings.skinEditor.skinDeleted') || 'Skin Eliminada',
+                    Lang.queryJS('settings.skinEditor.skinDeletedMessage') || 'Tu skin ha sido eliminada correctamente.',
+                    'OK'
+                )
+                setOverlayHandler(() => toggleOverlay(false))
+                toggleOverlay(true)
+            } catch (err) {
+                tecnilandLogger.error('Error deleting TECNILAND skin:', err)
+                setOverlayContent(
+                    'Error',
+                    err.message || 'No se pudo eliminar la skin.',
+                    'OK'
+                )
+                setOverlayHandler(() => toggleOverlay(false))
+                toggleOverlay(true)
+            }
+        })
+        setDismissHandler(() => toggleOverlay(false))
+        toggleOverlay(true, true)
+    })
+    
+    toggleOverlay(true, true)
+
+    // Handle file selection
+    input.onchange = async (e) => {
+        const file = e.target.files[0]
+        document.body.removeChild(input)
+        
+        if (!file) return
+        
+        // Validate file
+        if (!file.type.startsWith('image/png')) {
+            setOverlayContent(
+                Lang.queryJS('settings.skinEditor.invalidFile') || 'Archivo Inválido',
+                Lang.queryJS('settings.skinEditor.pngOnly') || 'Por favor selecciona un archivo PNG válido.',
+                'OK'
+            )
+            setOverlayHandler(() => toggleOverlay(false))
+            toggleOverlay(true)
+            return
+        }
+        
+        if (file.size > 2 * 1024 * 1024) {
+            setOverlayContent(
+                Lang.queryJS('settings.skinEditor.fileTooLarge') || 'Archivo Muy Grande',
+                Lang.queryJS('settings.skinEditor.maxSizeMessage') || 'El archivo de skin debe ser menor a 2MB.',
+                'OK'
+            )
+            setOverlayHandler(() => toggleOverlay(false))
+            toggleOverlay(true)
+            return
+        }
+        
+        // Ask for model type
+        setOverlayContent(
+            Lang.queryJS('settings.skinEditor.selectModel') || 'Seleccionar Modelo',
+            Lang.queryJS('settings.skinEditor.modelDescription') || '¿Qué tipo de modelo es tu skin?',
+            Lang.queryJS('settings.skinEditor.modelClassic') || 'Clásico (Steve)',
+            Lang.queryJS('settings.skinEditor.modelSlim') || 'Delgado (Alex)'
+        )
+        
+        setOverlayHandler(async () => {
+            toggleOverlay(false)
+            await uploadTecnilandSkin(file, 'steve')
+        })
+        
+        setDismissHandler(async () => {
+            toggleOverlay(false)
+            await uploadTecnilandSkin(file, 'slim')
+        })
+        
+        toggleOverlay(true, true)
+    }
+}
+
+/**
+ * Upload a skin to the TECNILAND server.
+ * @param {File} file - The skin file to upload
+ * @param {string} model - 'steve', 'alex' o 'slim'
+ */
+async function uploadTecnilandSkin(file, model) {
+    setOverlayContent(
+        Lang.queryJS('settings.skinEditor.uploading') || 'Subiendo Skin...',
+        Lang.queryJS('settings.skinEditor.pleaseWait') || 'Por favor espera mientras se sube tu skin.',
+        null
+    )
+    toggleOverlay(true, false)
+    
+    try {
+        const result = await TecnilandAuthManager.uploadSkin(file, model)
+        
+        if (result.success) {
+            tecnilandLogger.info('TECNILAND skin uploaded successfully')
+            
+            // Refrescar todos los avatares en la UI (landing, settings, etc.)
+            const currentUser = TecnilandAuthManager.getCurrentUser()
+            if (TecnilandAuthUI && typeof TecnilandAuthUI.refreshAvatar === 'function') {
+                TecnilandAuthUI.refreshAvatar(currentUser?.uuid)
+            }
+            
+            // Refrescar panel de settings (esto regenera las cuentas)
+            prepareSettings()
+            
+            // Actualizar hub principal si esta es la cuenta seleccionada
+            const selectedAccount = ConfigManager.getSelectedAccount()
+            if (selectedAccount && selectedAccount.type === 'tecniland') {
+                if (typeof updateSelectedAccount === 'function') {
+                    updateSelectedAccount(selectedAccount)
+                }
+            }
+            
+            setOverlayContent(
+                Lang.queryJS('settings.skinEditor.skinUpdated') || '¡Skin Actualizada!',
+                Lang.queryJS('settings.skinEditor.skinUpdatedMessage') || 'Tu skin ha sido actualizada correctamente.',
+                'OK'
+            )
+            setOverlayHandler(() => toggleOverlay(false))
+            toggleOverlay(true)
+        } else {
+            throw new Error(result.error || 'Error desconocido')
+        }
+    } catch (err) {
+        tecnilandLogger.error('TECNILAND skin upload error:', err)
+        setOverlayContent(
+            Lang.queryJS('settings.skinEditor.uploadError') || 'Error al Subir Skin',
+            err.message || 'No se pudo subir la skin.',
+            'OK'
+        )
+        setOverlayHandler(() => toggleOverlay(false))
+        toggleOverlay(true)
+    }
 }
 
 /**
@@ -1124,7 +1730,7 @@ async function openSkinEditor(uuid) {
         username: account.displayName,
         originalSkinPath: skinInfo.path,
         pendingSkinPath: null,
-        pendingModel: skinInfo.model || 'classic',
+        pendingModel: skinInfo.model || 'steve',
         hasChanges: false
     }
 
@@ -1185,7 +1791,7 @@ async function refreshSkinEditorPreview() {
 
 /**
  * Update the model selector buttons.
- * @param {string} model - 'classic' or 'slim'
+ * @param {string} model - 'steve', 'alex' o 'slim'
  */
 function updateModelSelector(model) {
     const buttons = document.querySelectorAll('.skinEditorModelBtn')
@@ -1415,7 +2021,7 @@ function closeSkinEditor() {
         username: null,
         originalSkinPath: null,
         pendingSkinPath: null,
-        pendingModel: 'classic',
+        pendingModel: 'steve',
         hasChanges: false
     }
 }
@@ -1465,7 +2071,7 @@ function bindSkinEditorHandlers() {
             
             // Si hay una skin (pendiente o original), marcar como cambio y refrescar
             if (skinEditorState.pendingSkinPath || skinEditorState.originalSkinPath) {
-                const originalModel = SkinManager.getSkinForUUID(skinEditorState.uuid)?.model || 'classic'
+                const originalModel = SkinManager.getSkinForUUID(skinEditorState.uuid)?.model || 'steve'
                 if (model !== originalModel || skinEditorState.pendingSkinPath) {
                     setSkinEditorPendingState(true)
                 }
@@ -1543,8 +2149,15 @@ async function resolveModsForUI(){
 
     const distro = await DistroAPI.getDistribution()
     const servConf = ConfigManager.getModConfiguration(serv)
+    
+    const server = distro.getServerById(serv)
+    if (!server || !server.modules) {
+        document.getElementById('settingsReqModsContent').innerHTML = ''
+        document.getElementById('settingsOptModsContent').innerHTML = ''
+        return
+    }
 
-    const modStr = parseModulesForUI(distro.getServerById(serv).modules, false, servConf.mods)
+    const modStr = parseModulesForUI(server.modules, false, servConf.mods)
 
     document.getElementById('settingsReqModsContent').innerHTML = modStr.reqMods
     document.getElementById('settingsOptModsContent').innerHTML = modStr.optMods
@@ -3089,15 +3702,151 @@ async function prepareSettings(first = false) {
         setupSettingsTabs()
         initSettingsValidators()
         prepareUpdateTab()
+        initSkinViewer3DControls() // Inicializar controles 3D solo la primera vez
     } else {
         // Cada vez que se abre Settings (no solo first time), resetear a "Cuenta"
         resetSettingsTabsToDefault()
         await prepareModsTab()
     }
     await initSettingsValues()
+    initSkinViewer3DValues() // Actualizar valores de controles 3D
     prepareAccountsTab()
     await prepareJavaTab()
     prepareAboutTab()
+}
+
+// Exponer función de actualización de cuentas para uso externo (ej. TecnilandAuthUI)
+window.refreshAccountsPanel = function() {
+    prepareAccountsTab()
+}
+
+// ========== SkinViewer3D Settings ==========
+
+/**
+ * Inicializar controles de SkinViewer3D (solo una vez)
+ */
+function initSkinViewer3DControls() {
+    const toggle = document.getElementById('skinViewer3DToggle')
+    const qualityContainer = document.getElementById('skinViewer3DQualityContainer')
+    
+    if (!toggle) {
+        console.warn('[Settings] Controles de SkinViewer3D no encontrados')
+        return
+    }
+    
+    // Toggle 3D on/off
+    toggle.addEventListener('change', function() {
+        ConfigManager.setSkinViewer3DEnabled(this.checked)
+        ConfigManager.save()
+        
+        // Mostrar/ocultar selector de calidad
+        if (qualityContainer) {
+            qualityContainer.style.display = this.checked ? 'flex' : 'none'
+        }
+        
+        // Aplicar cambio inmediatamente
+        try {
+            const SkinViewer3DManager = require('./assets/js/skinviewer3d/SkinViewer3DManager')
+            SkinViewer3DManager.toggle3D(this.checked)
+        } catch (err) {
+            console.error('Error toggling 3D:', err)
+        }
+        
+        // Refrescar viewer del landing
+        if (window.refreshSkinViewer3D) {
+            setTimeout(() => window.refreshSkinViewer3D(), 100)
+        }
+    })
+    
+    // Re-bind select después de crear el contenedor
+    bindSettingsSelect()
+    
+    // Agregar handlers a las opciones de calidad
+    const qualityOptions = document.querySelectorAll('#skinViewer3DQualityOptions .settingsSelectOption')
+    qualityOptions.forEach(option => {
+        option.addEventListener('click', function(e) {
+            e.stopPropagation()
+            const value = this.getAttribute('value')
+            const label = this.textContent.trim()
+            
+            ConfigManager.setSkinViewer3DQuality(value)
+            ConfigManager.save()
+            
+            // Actualizar texto del selector
+            const qualitySelected = document.getElementById('skinViewer3DQualitySelected')
+            if (qualitySelected) {
+                qualitySelected.textContent = label
+            }
+            
+            // Marcar como seleccionado
+            qualityOptions.forEach(opt => opt.removeAttribute('selected'))
+            this.setAttribute('selected', '')
+            
+            // Cerrar dropdown
+            const optionsContainer = document.getElementById('skinViewer3DQualityOptions')
+            if (optionsContainer) {
+                optionsContainer.setAttribute('hidden', '')
+            }
+            document.getElementById('skinViewer3DQualitySelected').classList.remove('select-arrow-active')
+            
+            // Aplicar cambio inmediatamente
+            try {
+                const SkinViewer3DManager = require('./assets/js/skinviewer3d/SkinViewer3DManager')
+                SkinViewer3DManager.setQuality(value)
+            } catch (err) {
+                console.error('Error setting quality:', err)
+            }
+            
+            // Refrescar viewer del landing
+            if (window.refreshSkinViewer3D) {
+                setTimeout(() => window.refreshSkinViewer3D(), 100)
+            }
+        })
+    })
+}
+
+/**
+ * Actualizar valores de controles de SkinViewer3D desde ConfigManager
+ */
+function initSkinViewer3DValues() {
+    const toggle = document.getElementById('skinViewer3DToggle')
+    const qualityContainer = document.getElementById('skinViewer3DQualityContainer')
+    const qualitySelect = document.getElementById('skinViewer3DQualitySelected')
+    
+    if (!toggle || !qualitySelect) return
+    
+    // Cargar valor de toggle
+    const enabled = ConfigManager.getSkinViewer3DEnabled()
+    toggle.checked = enabled
+    
+    // Mostrar/ocultar selector de calidad
+    if (qualityContainer) {
+        qualityContainer.style.display = enabled ? 'flex' : 'none'
+    }
+    
+    // Cargar valor de calidad
+    const quality = ConfigManager.getSkinViewer3DQuality()
+    const qualityLabels = {
+        'low': 'Bajo',
+        'medium': 'Medio',
+        'high': 'Alto'
+    }
+    qualitySelect.textContent = qualityLabels[quality] || 'Medio'
+    
+    // Marcar opción seleccionada
+    const qualityOptionsElements = document.querySelectorAll('#skinViewer3DQualityOptions .settingsSelectOption')
+    qualityOptionsElements.forEach(opt => {
+        if (opt.getAttribute('value') === quality) {
+            opt.setAttribute('selected', '')
+        } else {
+            opt.removeAttribute('selected')
+        }
+    })
+}
+
+// Exponer función de actualización de cuentas para uso externo (ej. TecnilandAuthUI)
+window.refreshAccountsPanel = function() {
+    prepareAccountsTab()
 }
 
 // Prepare the settings UI on startup.

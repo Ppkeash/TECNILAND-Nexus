@@ -28,6 +28,25 @@
                 <span class="settingsTabHeaderText"><%- lang('settings.tabAccountHeaderText') %></span>
                 <span class="settingsTabHeaderDesc"><%- lang('settings.tabAccountHeaderDesc') %></span>
             </div>
+
+            <!-- ==================== TECNILAND ACCOUNT SECTION ==================== -->
+            <div class="settingsAuthAccountTypeContainer">
+                <div class="settingsAuthAccountTypeHeader">
+                    <div class="settingsAuthAccountTypeHeaderLeft">
+                        <img src="assets/images/SealCircle.png" width="22" height="22" style="display: block;" alt="TECNILAND Logo">
+                        <span><%- lang('settings.tecnilandAccount') %></span>
+                    </div>
+                    <div class="settingsAuthAccountTypeHeaderRight">
+                        <button class="settingsAddAuthAccount" id="settingsAddTecnilandAccount"><%- lang('settings.addTecnilandAccount') %></button>
+                    </div>
+                </div>
+                
+                <div class="settingsCurrentAccounts" id="settingsCurrentTecnilandAccounts">
+                    <!-- TECNILAND auth accounts populated here. -->
+                </div>
+            </div>
+            <!-- ==================== FIN TECNILAND ACCOUNT SECTION ==================== -->
+
             <div class="settingsAuthAccountTypeContainer">
                 <div class="settingsAuthAccountTypeHeader">
                     <div class="settingsAuthAccountTypeHeaderLeft">
@@ -345,6 +364,38 @@
                     </label>
                 </div>
             </div>
+            <!-- Opciones 3D deshabilitadas - skinview3d no es compatible con Electron -->
+            <!-- El launcher ahora usa renderizado 2D del cuerpo estilo Microsoft -->
+            <!--
+            <div class="settingsFieldContainer" style="display:none;">
+                <div class="settingsFieldLeft">
+                    <span class="settingsFieldTitle">Renderizado 3D de Skins</span>
+                    <span class="settingsFieldDesc">Mostrar avatares de skins en 3D con animaciones sutiles. Desactiva para mejor rendimiento.</span>
+                </div>
+                <div class="settingsFieldRight">
+                    <label class="toggleSwitch">
+                        <input type="checkbox" cValue="SkinViewer3DEnabled" id="skinViewer3DToggle">
+                        <span class="toggleSwitchSlider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="settingsFieldContainer" id="skinViewer3DQualityContainer" style="display:none;">
+                <div class="settingsFieldLeft">
+                    <span class="settingsFieldTitle">Calidad de Renderizado 3D</span>
+                    <span class="settingsFieldDesc">Ajusta la calidad del renderizado 3D. Mayor calidad consume más recursos.</span>
+                </div>
+                <div class="settingsFieldRight">
+                    <div class="settingsSelectContainer" style="width: 150px;">
+                        <div class="settingsSelectSelected" id="skinViewer3DQualitySelected">Medio</div>
+                        <div class="settingsSelectOptions scrollbar-hidden" id="skinViewer3DQualityOptions" hidden>
+                            <div class="settingsSelectOption" id="skinViewer3DQualityLow" value="low">Bajo</div>
+                            <div class="settingsSelectOption" id="skinViewer3DQualityMedium" value="medium" selected>Medio</div>
+                            <div class="settingsSelectOption" id="skinViewer3DQualityHigh" value="high">Alto</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            -->
             <div class="settingsFieldContainer">
                 <div class="settingsFieldLeft">
                     <span class="settingsFieldTitle"><%- lang('settings.experimentalLoadersTitle') %></span>

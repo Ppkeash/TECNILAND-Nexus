@@ -44,9 +44,13 @@ loginPasswordDisclaimer2 = "{appName} no está afiliado con Mojang AB."
 
 [ejs.loginOptions]
 loginOptionsTitle = "Opciones de Inicio de Sesión"
-loginWithMicrosoft = "Iniciar Sesión con Microsoft"
-loginWithMojang = "Iniciar Sesión con Mojang"
-loginWithOffline = "Iniciar Sesión Offline (Crackeado)"
+loginWithMicrosoft = "Iniciar Sesión en Microsoft"
+loginWithMojang = "Iniciar Sesión en Mojang"
+loginWithOffline = "Iniciar Sesión en Offline"
+loginWithTecniland = "Iniciar Sesión en TECNILAND"
+tecnilandDescription = "Skins, multijugador y más"
+tecnilandRecommended = "RECOMENDADO"
+dividerText = "O inicia sesión con"
 cancelButton = "Cancelar"
 
 [ejs.overlay]
@@ -56,6 +60,12 @@ serverSelectCancel = "Cancelar"
 accountSelectHeader = "Selecciona una Cuenta"
 accountSelectConfirm = "Seleccionar"
 accountSelectCancel = "Cancelar"
+customizeTitle = "Personaliza tu launcher"
+customizeSubtitle = "Elige un fondo y un logo a tu gusto. Se aplica al instante."
+customizeBackgrounds = "Fondo"
+customizeRandomBg = "Aleatorio en cada inicio"
+customizeLogos = "Logo"
+customizeClose = "Cerrar"
 
 [ejs.settings]
 navHeaderText = "Configuración"
@@ -69,11 +79,13 @@ navUpdates = "Actualizaciones"
 navDone = "Listo"
 tabAccountHeaderText = "Configuración de Cuenta"
 tabAccountHeaderDesc = "Añade nuevas cuentas o administra las existentes."
+tecnilandAccount = "TECNILAND"
+addTecnilandAccount = "+ Añadir Cuenta TECNILAND"
 microsoftAccount = "Microsoft"
 addMicrosoftAccount = "+ Añadir Cuenta Microsoft"
 mojangAccount = "Mojang"
 addMojangAccount = "+ Añadir Cuenta Mojang"
-offlineAccount = "Cuentas Offline"
+offlineAccount = "Offline"
 addOfflineAccount = "+ Añadir Cuenta Offline"
 minecraftTabHeaderText = "Configuración de Minecraft"
 minecraftTabHeaderDesc = "Opciones relacionadas con el lanzamiento del juego."
@@ -243,19 +255,23 @@ launchingGame = "Iniciando juego.."
 launchWrapperNotDownloaded = "El archivo principal, LaunchWrapper, no se descargó correctamente. Como resultado, el juego no puede iniciarse.<br><br>Para solucionar este problema, desactiva temporalmente tu software antivirus e inicia el juego de nuevo."
 doneEnjoyServer = "¡Listo! ¡Disfruta del servidor!"
 checkConsoleForDetails = "Por favor, revisa la consola (CTRL + Shift + i) para más detalles."
+modpackMaintenanceTitle = "Modpack en Mantenimiento"
+modpackMaintenanceDefault = "Este modpack está temporalmente deshabilitado por mantenimiento. Vuelve a intentarlo más tarde."
+modpackWarnTitle = "Problemas de Conexión"
+modpackWarnText = "No se pudo verificar el estado del modpack con el servidor. Se permitirá continuar, pero si hay un mantenimiento en curso podrías encontrar problemas."
 
 [js.landing.news]
 checking = "Buscando Noticias"
-maintenanceTitle = "🔧 TECNILAND Nexus - Fase Beta"
+maintenanceTitle = "TECNILAND Nexus - Fase Beta 1.0.6"
 maintenanceContent = """<div style="font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6;">
 <h3 style="color: #4CAF50; margin-bottom: 15px;">¡Bienvenido a TECNILAND Nexus!</h3>
 
 <p>El launcher está actualmente en <strong>fase Beta</strong>. Estamos trabajando arduamente para traerte la mejor experiencia de Minecraft.</p>
 
-<h4 style="color: #2196F3; margin-top: 20px;">✅ Características Disponibles:</h4>
+<h4 style="color: #2196F3; margin-top: 20px;">¡Nuevas caracteristicas!</h4>
 <ul>
-<li><strong>Forge 1.13-1.21.x</strong> - Soporte completo</li>
-<li><strong>JavaManager</strong> - Gestión automática de Java</li>
+<li><strong>Integración de cuentas TECNILAND</strong> Modo beta</li>
+<li><strong>Skin Offline y Online</strong>Usando CustomSkinLoader</li>
 <li><strong>Visor de Logs en Vivo</strong> - Monitoreo en tiempo real</li>
 <li><strong>Instalaciones Personalizadas</strong> - Crea tu propio setup</li>
 </ul>
@@ -504,3 +520,129 @@ invalidDimensions = "Las dimensiones de la skin deben ser 64x64 o 64x32 píxeles
 saveError = "Error al guardar la skin. Por favor, intenta de nuevo."
 okButton = "Aceptar"
 galleryEmpty = "Sin skins en galería"
+tecnilandTitle = "Gestionar Skin de TECNILAND"
+tecnilandDescription = "Selecciona una opción para la cuenta {0}"
+uploadSkin = "Subir Nueva Skin"
+deleteSkin = "Eliminar Skin"
+confirmDeleteTitle = "Confirmar Eliminación"
+confirmDeleteMessage = "¿Estás seguro de que quieres eliminar tu skin?"
+confirmDeleteButton = "Sí, Eliminar"
+cancelButton = "Cancelar"
+skinDeleted = "Skin Eliminada"
+skinDeletedMessage = "Tu skin ha sido eliminada correctamente."
+invalidFile = "Archivo Inválido"
+pngOnly = "Por favor selecciona un archivo PNG válido."
+fileTooLarge = "Archivo Muy Grande"
+maxSizeMessage = "El archivo de skin debe ser menor a 2MB."
+selectModel = "Seleccionar Modelo"
+modelDescription = "¿Qué tipo de modelo es tu skin?"
+modelClassic = "Clásico (Steve)"
+modelSlim = "Delgado (Alex)"
+uploading = "Subiendo Skin..."
+pleaseWait = "Por favor espera mientras se sube tu skin."
+skinUpdated = "¡Skin Actualizada!"
+skinUpdatedMessage = "Tu skin ha sido actualizada correctamente."
+uploadError = "Error al Subir Skin"
+
+# =============================================================================
+# TECNILAND Account System
+# =============================================================================
+
+[ejs.loginOptions.tecniland]
+loginWithTecniland = "Cuenta TECNILAND"
+tecnilandDescription = "Skins, multijugador y más"
+recommended = "RECOMENDADO"
+
+[ejs.settings.tecniland]
+title = "Cuenta TECNILAND"
+recommended = "RECOMENDADO"
+description = "Tu cuenta para servidores TECNILAND con sistema de skins personalizado"
+username = "Usuario"
+email = "Email"
+uuid = "UUID"
+uploadSkin = "Subir Skin"
+deleteSkin = "Eliminar Skin"
+modelLabel = "Modelo de Skin"
+modelClassic = "Clásico (4px brazos)"
+modelSlim = "Delgado (3px brazos)"
+logout = "Cerrar Sesión"
+notLoggedIn = "No has iniciado sesión"
+loginPrompt = "Inicia sesión con tu cuenta TECNILAND para acceder a skins personalizadas y servidores multijugador."
+loginButton = "Iniciar Sesión"
+registerPrompt = "¿No tienes cuenta?"
+registerLink = "Regístrate gratis"
+
+[ejs.overlay.tecniland]
+title = "Cuenta TECNILAND"
+subtitle = "Sistema de autenticación TECNILAND"
+loginTitle = "INICIO DE SESIÓN TECNILAND"
+loginTab = "Iniciar Sesión"
+registerTab = "Registrarse"
+usernameLabel = "Usuario o Email"
+usernamePlaceholder = "Tu nombre de usuario o email"
+passwordLabel = "Contraseña"
+passwordPlaceholder = "Tu contraseña"
+rememberMe = "Recordarme"
+forgotPassword = "¿Olvidaste tu contraseña?"
+loginButton = "Iniciar Sesión"
+loginDescription = "Inicia sesión con tu cuenta TECNILAND para acceder a todos los servidores."
+noAccountText = "¿No tienes cuenta?"
+registerHereLink = "Regístrate en la web"
+registerUsernameLabel = "Nombre de Usuario"
+registerUsernamePlaceholder = "Elige un nombre de usuario"
+registerEmailLabel = "Email"
+registerEmailPlaceholder = "tu@email.com"
+registerPasswordLabel = "Contraseña"
+registerPasswordPlaceholder = "Mínimo 8 caracteres"
+registerConfirmLabel = "Confirmar Contraseña"
+registerConfirmPlaceholder = "Repite tu contraseña"
+registerButton = "Crear Cuenta"
+termsText = "Al registrarte, aceptas nuestros"
+termsLink = "Términos de Servicio"
+cancelButton = "Cancelar"
+
+[js.auth.tecniland.error]
+genericTitle = "Error de Autenticación"
+genericDesc = "Ocurrió un error durante la autenticación."
+invalidCredentialsTitle = "Credenciales Inválidas"
+invalidCredentialsDesc = "El usuario o contraseña son incorrectos."
+accountNotFoundTitle = "Cuenta No Encontrada"
+accountNotFoundDesc = "No existe una cuenta con ese nombre de usuario."
+accountBannedTitle = "Cuenta Suspendida"
+accountBannedDesc = "Esta cuenta ha sido suspendida."
+emailNotVerifiedTitle = "Email No Verificado"
+emailNotVerifiedDesc = "Debes verificar tu email antes de iniciar sesión."
+serverErrorTitle = "Error del Servidor"
+serverErrorDesc = "El servidor TECNILAND no está disponible."
+networkErrorTitle = "Error de Conexión"
+networkErrorDesc = "No se pudo conectar con el servidor TECNILAND."
+usernameExistsTitle = "Usuario Existente"
+usernameExistsDesc = "Este nombre de usuario ya está en uso."
+emailExistsTitle = "Email Existente"
+emailExistsDesc = "Este email ya está registrado."
+passwordMismatchTitle = "Contraseñas No Coinciden"
+passwordMismatchDesc = "Las contraseñas ingresadas no coinciden."
+weakPasswordTitle = "Contraseña Débil"
+weakPasswordDesc = "La contraseña debe tener al menos 8 caracteres."
+invalidEmailTitle = "Email Inválido"
+invalidEmailDesc = "Por favor ingresa un email válido."
+invalidUsernameTitle = "Usuario Inválido"
+invalidUsernameDesc = "El nombre de usuario debe tener entre 3 y 16 caracteres (letras, números y guiones bajos)."
+
+[js.auth.tecniland.success]
+loginTitle = "¡Bienvenido!"
+loginDesc = "Has iniciado sesión correctamente."
+registerTitle = "¡Cuenta Creada!"
+registerDesc = "Tu cuenta ha sido creada. Ya puedes iniciar sesión."
+logoutTitle = "Sesión Cerrada"
+logoutDesc = "Has cerrado sesión correctamente."
+skinUploadedTitle = "¡Skin Actualizada!"
+skinUploadedDesc = "Tu skin ha sido actualizada correctamente."
+skinDeletedTitle = "Skin Eliminada"
+skinDeletedDesc = "Tu skin ha sido eliminada. Se usará la skin por defecto."
+
+[js.auth.tecniland.validation]
+usernameRequired = "El nombre de usuario es requerido"
+emailRequired = "El email es requerido"
+passwordRequired = "La contraseña es requerida"
+confirmPasswordRequired = "Debes confirmar tu contraseña"

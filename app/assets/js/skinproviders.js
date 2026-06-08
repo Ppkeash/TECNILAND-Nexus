@@ -140,9 +140,10 @@ class LocalSkinProvider {
 class TecnilandSkinProvider {
     constructor() {
         // TODO [BACKEND-YGGDRASIL]: Configurar endpoint del servidor
-        this.authServerUrl = null // 'https://auth.tecniland.net/authserver'
-        this.sessionServerUrl = null // 'https://auth.tecniland.net/sessionserver'
-        this.apiServerUrl = null // 'https://auth.tecniland.net/api'
+        // Producción: https://tecniland-backend.fly.dev
+        this.authServerUrl = null // 'https://tecniland-backend.fly.dev/authserver'
+        this.sessionServerUrl = null // 'https://tecniland-backend.fly.dev/sessionserver'
+        this.apiServerUrl = null // 'https://tecniland-backend.fly.dev/api'
         
         this.accessToken = null
         this.clientToken = null

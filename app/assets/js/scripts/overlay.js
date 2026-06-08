@@ -8,6 +8,10 @@ const { BrowserWindow } = remote
 // Importar módulo de detección de OptiFine
 const OptiFineVersions = require('./assets/js/optifineversions')
 
+// Cliente de estado de modpacks (mantenimiento)
+const ModpackStatusClient = require('./assets/js/modpackstatusclient')
+const SecurityHelperOverlay = require('./assets/js/securityhelper')
+
 // Listen for experimental loaders setting change from settings.js
 window.addEventListener('experimental-loaders-changed', () => {
     updateExperimentalLoadersVisibility()
@@ -131,6 +135,197 @@ function toggleOverlay(toggleState, dismissable = false, content = 'overlayConte
 async function toggleServerSelection(toggleState){
     await prepareServerSelectionList()
     toggleOverlay(toggleState, true, 'serverSelectContent')
+}
+
+// ============================================================================
+// CUSTOMIZE OVERLAY (fondo + logo del launcher)
+// ============================================================================
+
+const CUSTOMIZE_DEFAULT_LOGO = 'assets/images/SealCircle.png'
+
+/**
+ * Ruta absoluta a app/assets/images (funciona en dev y empaquetado/asar).
+ * Se deriva de la ubicación de un módulo conocido del renderer.
+ */
+function _customizeImagesDir(){
+    const path = require('path')
+    // require.resolve usa app/ como base en el renderer.
+    const cfgPath = require.resolve('./assets/js/configmanager.js')
+    return path.join(path.dirname(cfgPath), '..', 'images')
+}
+
+/**
+ * Lista archivos de un subdirectorio de images con las extensiones dadas.
+ * @returns {string[]} nombres de archivo (vacío si falla).
+ */
+function _customizeListFiles(subdir, exts){
+    const fs = require('fs')
+    const path = require('path')
+    try {
+        const dir = path.join(_customizeImagesDir(), subdir)
+        return fs.readdirSync(dir)
+            .filter(f => exts.some(e => f.toLowerCase().endsWith(e)))
+            .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    } catch (e){
+        console.warn(`[Customize] No se pudo listar ${subdir}:`, e.message)
+        return []
+    }
+}
+
+/**
+ * Aplica un fondo. Si persist, lo guarda en config y fija el modo (no aleatorio),
+ * porque elegir un fondo concreto implica quererlo fijo.
+ */
+function applyCustomBackground(file, persist = true){
+    document.body.style.backgroundImage = `url('assets/images/backgrounds/${file}')`
+    if(persist){
+        ConfigManager.setSelectedBackground(file)
+        ConfigManager.setBackgroundRandom(false)
+        ConfigManager.save()
+    }
+}
+
+/**
+ * Cambia el modo de fondo: aleatorio en cada inicio vs fijo (el elegido).
+ * @param {boolean} random
+ */
+function applyBackgroundMode(random){
+    ConfigManager.setBackgroundRandom(random)
+    ConfigManager.save()
+    if(random){
+        // Aleatorio: aplica uno al azar al instante (feedback inmediato).
+        // NO toca el fondo guardado, para poder restaurarlo si se desactiva.
+        const bgs = _customizeListFiles('backgrounds', ['.jpg', '.jpeg', '.png'])
+        if(bgs.length){
+            const pick = bgs[Math.floor(Math.random() * bgs.length)]
+            document.body.style.backgroundImage = `url('assets/images/backgrounds/${pick}')`
+        }
+    } else {
+        // Fijo: si hay un fondo elegido, aplicarlo ya.
+        const sel = ConfigManager.getSelectedBackground()
+        if(sel){
+            document.body.style.backgroundImage = `url('assets/images/backgrounds/${sel}')`
+        }
+    }
+}
+
+/**
+ * Aplica un logo al seal del menú. Si persist, lo guarda en config.
+ * @param {string} webPath Ruta web del logo (o CUSTOMIZE_DEFAULT_LOGO).
+ */
+function applyCustomLogo(webPath, persist = true){
+    const el = document.getElementById('image_seal')
+    if(el){
+        el.src = webPath
+    }
+    if(persist){
+        // null = por defecto (SealCircle.png)
+        ConfigManager.setSelectedLogo(webPath === CUSTOMIZE_DEFAULT_LOGO ? null : webPath)
+        ConfigManager.save()
+    }
+}
+
+/**
+ * Aplica la customización guardada (fondo + logo). Llamar al cargar el launcher.
+ */
+function applySavedCustomization(){
+    try {
+        // El fondo lo gestiona uibinder respetando el modo aleatorio; aquí solo
+        // lo aplicamos si NO es aleatorio (para no pisar el fondo random).
+        const bg = ConfigManager.getSelectedBackground()
+        if(bg && !ConfigManager.getBackgroundRandom()){
+            document.body.style.backgroundImage = `url('assets/images/backgrounds/${bg}')`
+        }
+        const logo = ConfigManager.getSelectedLogo()
+        if(logo){
+            const el = document.getElementById('image_seal')
+            if(el){
+                el.src = logo
+            }
+        }
+    } catch (e){
+        console.warn('[Customize] No se pudo aplicar la customización guardada:', e.message)
+    }
+}
+
+/**
+ * Construye las grillas de fondos y logos dentro del overlay.
+ */
+function prepareCustomizeOverlay(){
+    const bgGrid = document.getElementById('customizeBackgroundGrid')
+    const logoGrid = document.getElementById('customizeLogoGrid')
+    if(!bgGrid || !logoGrid){
+        return
+    }
+
+    const selectedBg = ConfigManager.getSelectedBackground()
+    const selectedLogo = ConfigManager.getSelectedLogo()
+    const randomBg = ConfigManager.getBackgroundRandom()
+
+    // Botón cerrar (idempotente).
+    const closeBtn = document.getElementById('customizeCloseBtn')
+    if(closeBtn){
+        closeBtn.onclick = () => toggleCustomizeOverlay(false)
+    }
+
+    // Toggle aleatorio/fijo.
+    const randomToggle = document.getElementById('customizeRandomBgToggle')
+    if(randomToggle){
+        randomToggle.checked = randomBg
+        randomToggle.onchange = () => {
+            applyBackgroundMode(randomToggle.checked)
+            prepareCustomizeOverlay() // refrescar estado visual
+        }
+    }
+
+    // --- Fondos ---
+    // Cuando el modo es aleatorio, la grilla se atenúa (la selección no se usa al iniciar).
+    bgGrid.style.opacity = randomBg ? '0.45' : '1'
+    bgGrid.innerHTML = ''
+    const backgrounds = _customizeListFiles('backgrounds', ['.jpg', '.jpeg', '.png'])
+    for(const file of backgrounds){
+        const isSel = selectedBg === file
+        const item = document.createElement('div')
+        item.style.cssText = `position: relative; height: 84px; border-radius: 8px; cursor: pointer; background-image: url('assets/images/backgrounds/${file}'); background-size: cover; background-position: center; border: 3px solid ${isSel ? '#e74c32' : 'transparent'}; box-shadow: 0 2px 6px rgba(0,0,0,0.4); transition: border-color 0.15s;`
+        item.setAttribute('data-bg', file)
+        item.onclick = () => {
+            applyCustomBackground(file, true)
+            prepareCustomizeOverlay() // refrescar selección
+        }
+        bgGrid.appendChild(item)
+    }
+
+    // --- Logos ---
+    logoGrid.innerHTML = ''
+    // Opción por defecto (SealCircle.png) siempre presente.
+    const logoOptions = [{ web: CUSTOMIZE_DEFAULT_LOGO, isDefault: true }]
+    for(const file of _customizeListFiles('logos', ['.png'])){
+        logoOptions.push({ web: `assets/images/logos/${file}`, isDefault: false })
+    }
+    for(const opt of logoOptions){
+        const isSel = opt.isDefault ? (selectedLogo == null) : (selectedLogo === opt.web)
+        const item = document.createElement('div')
+        item.style.cssText = `display: flex; align-items: center; justify-content: center; height: 84px; border-radius: 8px; cursor: pointer; background: rgba(255,255,255,0.06); border: 3px solid ${isSel ? '#e74c32' : 'transparent'}; transition: border-color 0.15s;`
+        const img = document.createElement('img')
+        img.src = opt.web
+        img.style.cssText = 'max-width: 64px; max-height: 64px; object-fit: contain;'
+        item.appendChild(img)
+        item.onclick = () => {
+            applyCustomLogo(opt.web, true)
+            prepareCustomizeOverlay()
+        }
+        logoGrid.appendChild(item)
+    }
+}
+
+/**
+ * Abre/cierra el overlay de customización.
+ */
+function toggleCustomizeOverlay(toggleState = true){
+    if(toggleState){
+        prepareCustomizeOverlay()
+    }
+    toggleOverlay(toggleState, true, 'customizeContent')
 }
 
 // ============================================================================
@@ -596,13 +791,23 @@ document.getElementById('serverSelectConfirm').addEventListener('click', async (
         }
     }
     
-    // None are selected? Not possible right? Meh, handle it.
+    // None are selected? Elegir el primer servidor NO en mantenimiento.
     if(serverListings.length > 0){
-        const serv = (await DistroAPI.getDistribution()).getServerById(serverListings[0].getAttribute('servid'))
-        updateSelectedServer(serv)
-        ConfigManager.setSelectedServer(serv.rawServer.id)
-        ConfigManager.setSelectedInstallation(null)
-        ConfigManager.save()
+        let firstAvailable = null
+        for(let i=0; i<serverListings.length; i++){
+            if(!serverListings[i].classList.contains('maintenance')){
+                firstAvailable = serverListings[i]
+                break
+            }
+        }
+        if(firstAvailable){
+            const serv = (await DistroAPI.getDistribution()).getServerById(firstAvailable.getAttribute('servid'))
+            updateSelectedServer(serv)
+            ConfigManager.setSelectedServer(serv.rawServer.id)
+            ConfigManager.setSelectedInstallation(null)
+            ConfigManager.save()
+        }
+        // Si todos están en mantenimiento, no se selecciona nada (queda "Sin seleccionar").
         toggleOverlay(false)
     }
 })
@@ -715,11 +920,12 @@ function setAutoProfileListingHandlers() {
             // Limpiar todas las selecciones (servidores, instalaciones, auto-profiles)
             const allListings = document.querySelectorAll('.serverListing, .installationListing, .autoProfileListing')
             allListings.forEach(listing => listing.removeAttribute('selected'))
-            
+
             val.setAttribute('selected', '')
             document.activeElement.blur()
+            updateServerSelectConfirmState()
         }
-        
+
         // Auto-profiles tienen menú contextual (solo Eliminar, no Editar)
         val.oncontextmenu = async (e) => {
             e.preventDefault()
@@ -810,22 +1016,32 @@ function setServerListingHandlers(){
         if (val.classList.contains('installationListing')) return
         
         const serverId = val.getAttribute('servid')
-        
+
+        // Modpack en mantenimiento: no se puede seleccionar.
+        if (val.classList.contains('maintenance')) {
+            val.onclick = e => {
+                e.preventDefault()
+                document.activeElement.blur()
+            }
+            return
+        }
+
         // Left click: Select server (original behavior)
         val.onclick = e => {
             if(val.hasAttribute('selected')){
                 return
             }
-            
+
             // Limpiar TODAS las selecciones (servidores, instalaciones, auto-profiles)
             const allListings = document.querySelectorAll('.serverListing, .installationListing, .autoProfileListing')
             allListings.forEach(listing => listing.removeAttribute('selected'))
-            
+
             val.setAttribute('selected', '')
             ConfigManager.setSelectedServer(serverId)
             document.activeElement.blur()
+            updateServerSelectConfirmState()
         }
-        
+
         // Right click: Show modpack options menu (TECNILAND feature)
         // SOLO para servidores de TECNILAND, NO para instalaciones personalizadas
         if (ModpackManager) {
@@ -835,6 +1051,30 @@ function setServerListingHandlers(){
             }
         }
     })
+
+    updateServerSelectConfirmState()
+}
+
+/**
+ * Habilita/deshabilita el botón "serverSelectConfirm" según haya o no una
+ * selección válida (no en mantenimiento). Si el único/los modpacks visibles
+ * están en mantenimiento y no hay nada más seleccionado, el confirm se bloquea.
+ */
+function updateServerSelectConfirmState(){
+    const confirmBtn = document.getElementById('serverSelectConfirm')
+    if(!confirmBtn) return
+
+    const hasValidServer = document.querySelector('.serverListing[selected]:not(.maintenance)') != null
+    const hasInstallation = document.querySelector('.installationListing[selected]') != null
+    const hasAutoProfile = document.querySelector('.autoProfileListing[selected]') != null
+
+    const enabled = hasValidServer || hasInstallation || hasAutoProfile
+    confirmBtn.disabled = !enabled
+    if(enabled){
+        confirmBtn.removeAttribute('disabled')
+    } else {
+        confirmBtn.setAttribute('disabled', '')
+    }
 }
 
 // ============================================================================
@@ -1076,11 +1316,12 @@ function setInstallationListingHandlers(){
             // Limpiar TODAS las selecciones (servidores, instalaciones, auto-profiles)
             const allListings = document.querySelectorAll('.serverListing, .installationListing, .autoProfileListing')
             allListings.forEach(listing => listing.removeAttribute('selected'))
-            
+
             val.setAttribute('selected', '')
             document.activeElement.blur()
+            updateServerSelectConfirmState()
         }
-        
+
         // Agregar menú contextual (click derecho) - solo para instalaciones personalizadas, no auto-profiles
         val.oncontextmenu = e => {
             e.preventDefault()
@@ -1397,16 +1638,22 @@ async function populateServerListings(){
     } catch (err) {
         console.error('[ServerListings] ModpackManager not available:', err)
     }
-    
+
+    // Refrescar estado de mantenimiento de los modpacks (fail-open).
+    // Usa caché si fue consultada hace menos de 15s para no añadir latencia al abrir el modal.
+    await ModpackStatusClient.fetchAndCacheStatuses({ maxAgeMs: 15000 })
+
     let htmlString = ''
     for(const serv of servers){
         const serverId = serv.rawServer.id
-        const isSelected = serverId === giaSel
-        
+        const underMaintenance = ModpackStatusClient.isUnderMaintenance(serverId)
+        // Un modpack en mantenimiento no puede quedar "seleccionado" en la lista.
+        const isSelected = serverId === giaSel && !underMaintenance
+
         // Check modpack installation state
         let installState = 'not-installed'
         let installBadge = ''
-        
+
         if (ModpackManager) {
             try {
                 const state = await ModpackManager.getModpackState(serverId)
@@ -1424,7 +1671,16 @@ async function populateServerListings(){
             }
         }
         
-        htmlString += `<button class="serverListing tecniland-server-card ${installState}" servid="${serverId}" ${isSelected ? 'selected' : ''}>
+        let maintenanceBadge = ''
+        if (underMaintenance) {
+            maintenanceBadge = '<span class="server-badge-maintenance">🔧 En mantenimiento</span>'
+            const rawMsg = (ModpackStatusClient.getMaintenanceMessage(serverId) || '').trim()
+            if (rawMsg.length > 0) {
+                maintenanceBadge += `<span class="server-maintenance-msg">${SecurityHelperOverlay.escapeHTML(rawMsg)}</span>`
+            }
+        }
+
+        htmlString += `<button class="serverListing tecniland-server-card ${installState}${underMaintenance ? ' maintenance' : ''}" servid="${serverId}" ${isSelected ? 'selected' : ''} ${underMaintenance ? 'disabled' : ''}>
             <img class="serverListingImg" src="${serv.rawServer.icon}"/>
             <div class="serverListingDetails">
                 <span class="serverListingName">${serv.rawServer.name}</span>
@@ -1432,6 +1688,7 @@ async function populateServerListings(){
                 <div class="serverListingInfo">
                     <div class="serverListingVersion">${serv.rawServer.minecraftVersion}</div>
                     <div class="serverListingRevision">${serv.rawServer.version}</div>
+                    ${maintenanceBadge}
                     ${installBadge}
                     ${serv.rawServer.mainServer ? `<div class="serverListingStarWrapper">
                         <svg id="Layer_1" viewBox="0 0 107.45 104.74" width="20px" height="20px">

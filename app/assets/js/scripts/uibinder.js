@@ -205,7 +205,15 @@ async function showMainUI(data){
     }
 
     await prepareSettings(true)
-    
+
+    // Precargar estado de mantenimiento de los modpacks para que la selección
+    // restaurada se muestre correctamente (un modpack en mantenimiento → "Sin seleccionar").
+    try {
+        await require('./assets/js/modpackstatusclient').fetchAndCacheStatuses()
+    } catch (err) {
+        console.warn('[UIBinder] No se pudo precargar el estado de modpacks:', err.message)
+    }
+
     // Restaurar selección: puede ser auto-profile, instalación personalizada, o servidor TECNILAND
     await restoreSelectedServerOrInstallation(data)
     
@@ -216,7 +224,15 @@ async function showMainUI(data){
     
     setTimeout(() => {
         document.getElementById('frameBar').style.backgroundColor = 'rgba(0, 0, 0, 0.5)'
-        document.body.style.backgroundImage = `url('assets/images/backgrounds/${document.body.getAttribute('bkid')}.jpg')`
+        // Fondo: fijo (el elegido) salvo que el modo aleatorio esté activo o no haya elección.
+        const savedBg = ConfigManager.getSelectedBackground()
+        const randomBg = ConfigManager.getBackgroundRandom()
+        document.body.style.backgroundImage = (!randomBg && savedBg)
+            ? `url('assets/images/backgrounds/${savedBg}')`
+            : `url('assets/images/backgrounds/${document.body.getAttribute('bkid')}.jpg')`
+        // Aplica logo personalizado guardado (si hay) y enlaza el panel de customización.
+        applySavedCustomization()
+        bindSealCustomization()
         $('#main').show()
 
         const isLoggedIn = Object.keys(ConfigManager.getAuthAccounts()).length > 0
@@ -473,9 +489,9 @@ function mergeModConfiguration(o, n, nReq = false){
 async function validateSelectedAccount(){
     const selectedAcc = ConfigManager.getSelectedAccount()
     if(selectedAcc != null){
-        // Skip validation for offline accounts
-        if(selectedAcc.type === 'offline'){
-            // Offline accounts are always valid
+        // Skip validation for offline and TECNILAND accounts
+        if(selectedAcc.type === 'offline' || selectedAcc.type === 'tecniland'){
+            // Offline and TECNILAND accounts don't use Mojang validation
             return true
         }
         

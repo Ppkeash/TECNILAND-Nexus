@@ -5,16 +5,16 @@
 title = "TECNILAND Nexus"
 
 [ejs.landing]
-mediaGitHubURL = "https://github.com/Ppkeash/TECNILAND-Nexus"
-mediaXURL = "#"
+mediaGitHubURL = "https://github.com/Ppkeash"
+mediaXURL = "https://x.com/UniLekConz"
 mediaInstagramURL = "https://www.instagram.com/ppzek_sh/"
 mediaYouTubeURL = "https://www.youtube.com/@lil_kysh"
-mediaDiscordURL = "https://discord.gg/eDmCZnc8tv"
+mediaDiscordURL = "https://discord.gg/53T4Tzrea3"
 
 [ejs.settings]
 # Original: https://github.com/dscalzi/HeliosLauncher
-sourceGithubLink = "https://github.com/Ppkeash/TECNILAND-Nexus"
-supportLink = "https://discord.gg/eDmCZnc8tv"
+sourceGithubLink = "#"
+supportLink = "#"
 
 [ejs.welcome]
 welcomeHeader = "BIENVENIDO A TECNILAND NEXUS"

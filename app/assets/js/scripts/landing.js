@@ -54,6 +54,7 @@
     const ProcessBuilder = require('./assets/js/processbuilder')
     const JavaManager = require('./assets/js/javamanager')
     const SecurityHelper = require('./assets/js/securityhelper')
+    const ModpackStatusClient = require('./assets/js/modpackstatusclient')
     
     // ConfigManager e InstallationManager ya están disponibles globalmente
     // const ConfigManager = require('./assets/js/configmanager')
@@ -477,11 +478,14 @@ function updateSelectedServer(serv){
     }
     ConfigManager.setSelectedServer(serv != null ? serv.rawServer.id : null)
     ConfigManager.save()
-    server_selection_button.innerHTML = '&#8226; ' + (serv != null ? serv.rawServer.name : Lang.queryJS('landing.noSelection'))
+    // Si el modpack está en mantenimiento, se muestra como "Sin seleccionar" y se
+    // desactiva el botón de jugar (la selección se conserva en config para cuando vuelva).
+    const underMaintenance = serv != null && ModpackStatusClient.isUnderMaintenance(serv.rawServer.id)
+    server_selection_button.innerHTML = '&#8226; ' + ((serv != null && !underMaintenance) ? serv.rawServer.name : Lang.queryJS('landing.noSelection'))
     if(getCurrentView() === VIEWS.settings){
         animateSettingsTabRefresh()
     }
-    setLaunchEnabled(serv != null)
+    setLaunchEnabled(serv != null && !underMaintenance)
 }
 // Real text is set in uibinder.js on distributionIndexDone.
 server_selection_button.innerHTML = '&#8226; ' + Lang.queryJS('landing.selectedServer.loading')
@@ -612,6 +616,50 @@ function showLaunchFailure(title, desc){
     setOverlayHandler(null)
     toggleOverlay(true)
     toggleLaunchArea(false)
+}
+
+/**
+ * Verifica si la instalación del modpack está permitida según el backend.
+ * Fail-open: si no se puede consultar el estado, se permite continuar y se avisa.
+ * @param {string} serverId ID del servidor/modpack (distribución)
+ * @param {Object} logger Logger de la suite de lanzamiento
+ * @returns {Promise<{blocked:boolean, message?:string, connectionWarning?:boolean}>}
+ */
+async function checkModpackInstallAllowed(serverId, logger){
+    const status = await ModpackStatusClient.fetchStatus(serverId)
+    if(!status.connectionOk){
+        logger.warn(`[MODPACK] No se pudo verificar el estado del modpack (fail-open): ${serverId}`)
+        return { blocked: false, connectionWarning: true }
+    }
+    if(status.enabled === false){
+        const raw = (status.maintenanceMessage || '').trim()
+        const message = raw.length > 0
+            ? SecurityHelper.escapeHTML(raw)
+            : Lang.queryJS('landing.dlAsync.modpackMaintenanceDefault')
+        logger.warn(`[MODPACK] Instalación bloqueada por mantenimiento: ${serverId}`)
+        return { blocked: true, message }
+    }
+    return { blocked: false }
+}
+
+/**
+ * Muestra un aviso no-bloqueante de fallo de conexión al verificar el modpack.
+ * Resuelve cuando el usuario lo cierra; la instalación continúa después.
+ * @returns {Promise<void>}
+ */
+function showModpackConnectionWarning(){
+    return new Promise(resolve => {
+        setOverlayContent(
+            Lang.queryJS('landing.dlAsync.modpackWarnTitle'),
+            Lang.queryJS('landing.dlAsync.modpackWarnText'),
+            Lang.queryJS('landing.launch.okay')
+        )
+        setOverlayHandler(() => {
+            toggleOverlay(false)
+            resolve()
+        })
+        toggleOverlay(true)
+    })
 }
 
 /* System (Java) Scan */
@@ -1077,6 +1125,22 @@ async function dlAsync(login = true) {
         loggerLaunchSuite.info(`Lanzando instalación personalizada: ${target.installation.name}`)
         loggerLaunchSuite.info(`  Loader: ${target.installation.loader.type} ${target.installation.loader.loaderVersion || ''}`)
         loggerLaunchSuite.info(`  Minecraft: ${target.installation.loader.minecraftVersion}`)
+    }
+
+    // ============================================================
+    // GATE DE MANTENIMIENTO DEL MODPACK (solo servers de distribución)
+    // El backend puede deshabilitar la instalación de un modpack concreto.
+    // Fail-open: si no se puede consultar, se permite continuar con aviso.
+    // ============================================================
+    if (isDistroServer && serverId) {
+        const gate = await checkModpackInstallAllowed(serverId, loggerLaunchSuite)
+        if (gate.blocked) {
+            showLaunchFailure(Lang.queryJS('landing.dlAsync.modpackMaintenanceTitle'), gate.message)
+            return
+        }
+        if (gate.connectionWarning) {
+            await showModpackConnectionWarning()
+        }
     }
 
     // ============================================================
@@ -2010,9 +2074,10 @@ async function refreshLandingForSelectedServer() {
         const distro = await DistroAPI.getDistribution()
         const server = distro.getServerById(serverId)
         if (server) {
-            server_selection_button.innerHTML = '&#8226; ' + server.rawServer.name
-            setLaunchEnabled(true)
-            loggerLanding.info(`Landing refreshed for modpack: ${serverId}`)
+            const underMaintenance = ModpackStatusClient.isUnderMaintenance(serverId)
+            server_selection_button.innerHTML = '&#8226; ' + (underMaintenance ? Lang.queryJS('landing.noSelection') : server.rawServer.name)
+            setLaunchEnabled(!underMaintenance)
+            loggerLanding.info(`Landing refreshed for modpack: ${serverId}${underMaintenance ? ' (en mantenimiento)' : ''}`)
         }
     } catch (err) {
         loggerLanding.error('Failed to refresh landing for modpack:', err)

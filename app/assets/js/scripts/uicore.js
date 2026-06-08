@@ -11,6 +11,7 @@ const remote                         = require('@electron/remote')
 const isDev                          = require('./assets/js/isdev')
 const { LoggerUtil }                 = require('helios-core')
 const Lang                           = require('./assets/js/langloader')
+const SecurityHelper                 = require('./assets/js/securityhelper')
 
 const loggerUICore             = LoggerUtil.getLogger('UICore')
 const loggerAutoUpdater        = LoggerUtil.getLogger('AutoUpdater')
@@ -54,7 +55,7 @@ if(!isDev){
                 
                 if(process.platform === 'darwin'){
                     info.darwindownload = `https://github.com/Ppkeash/TECNILAND-Nexus/releases/download/v${info.version}/TECNILAND-Nexus-setup-${info.version}${process.arch === 'arm64' ? '-arm64' : '-x64'}.dmg`
-                    showUpdateUI(info)
+                    showUpdateUI(info)          
                 }
                 
                 // Verificar que la función existe antes de llamarla
@@ -152,6 +153,26 @@ function showUpdateUI(info){
     }
 }
 
+/**
+ * Hace clickeable el seal del menú para abrir el panel de customización
+ * (fondo + logo). Si hay una actualización disponible (atributo 'update'),
+ * showUpdateUI ya asignó su propio handler y este no lo sobrescribe.
+ */
+function bindSealCustomization(){
+    const container = document.getElementById('image_seal_container')
+    if(!container){
+        return
+    }
+    container.style.cursor = 'pointer'
+    if(!container.hasAttribute('update')){
+        container.onclick = () => {
+            if(typeof toggleCustomizeOverlay === 'function'){
+                toggleCustomizeOverlay(true)
+            }
+        }
+    }
+}
+
 /* jQuery Example
 $(function(){
     loggerUICore.info('UICore Initialized');
@@ -219,20 +240,44 @@ document.addEventListener('readystatechange', function () {
 
 /**
  * Open web links in the user's default browser.
+ * SECURITY: Validate URLs before opening to prevent malicious redirects
  */
 $(document).on('click', 'a[href^="http"]', function(event) {
     event.preventDefault()
-    shell.openExternal(this.href)
+    const validation = SecurityHelper.validateExternalUrl(this.href)
+    if (validation.valid) {
+        shell.openExternal(this.href)
+    } else {
+        loggerUICore.warn(`URL bloqueada por seguridad: ${this.href} - Razón: ${validation.reason}`)
+        // En desarrollo, mostrar advertencia
+        if (isDev) {
+            console.warn('[SECURITY] URL externa bloqueada:', this.href, validation.reason)
+        }
+    }
 })
 
 /**
  * Opens DevTools window if you hold (ctrl + shift + i).
+ * SECURITY: Solo permitir en modo desarrollo
  * This will crash the program if you are using multiple
  * DevTools, for example the chrome debugger in VS Code. 
+ * 
+ * ⚠️ TEMPORARY DEBUG MODE: DevTools enabled in production for testing
  */
 document.addEventListener('keydown', function (e) {
     if((e.key === 'I' || e.key === 'i') && e.ctrlKey && e.shiftKey){
+        // TEMPORARY: DevTools habilitado para debugging
         let window = remote.getCurrentWindow()
         window.toggleDevTools()
+        
+        /* ORIGINAL SECURITY CODE (restaurar después del testing):
+        // SECURITY: Solo permitir DevTools en desarrollo
+        if (isDev) {
+            let window = remote.getCurrentWindow()
+            window.toggleDevTools()
+        } else {
+            console.log('%c DevTools deshabilitado en producción', 'color: orange; font-size: 14px;')
+        }
+        */
     }
 })

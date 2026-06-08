@@ -113,7 +113,12 @@ const DEFAULT_CONFIG = {
     javaConfig: {},
     installations: [],
     selectedInstallation: null,
-    modpackInstallations: []  // TECNILAND Modpacks state
+    modpackInstallations: [],  // TECNILAND Modpacks state
+    customization: {
+        background: null,        // nombre de archivo del fondo elegido, ej. '3.jpg' (o null)
+        backgroundRandom: false, // true = aleatorio en cada inicio (ignora 'background')
+        logo: null               // null = SealCircle.png por defecto. Si no, ruta relativa al logo
+    }
 }
 
 let config = null
@@ -1183,6 +1188,71 @@ exports.getLanguage = function(def = false){
  */
 exports.setLanguage = function(language){
     config.settings.launcher.language = language
+}
+
+// Customization (fondo y logo del launcher)
+
+/**
+ * Obtener el fondo personalizado elegido por el usuario.
+ *
+ * @returns {string|null} Nombre de archivo del fondo (ej. '3.jpg') o null si es aleatorio.
+ */
+exports.getSelectedBackground = function(){
+    return config.customization?.background ?? null
+}
+
+/**
+ * Establecer el fondo personalizado.
+ *
+ * @param {string|null} background Nombre de archivo (ej. '3.jpg') o null para aleatorio.
+ */
+exports.setSelectedBackground = function(background){
+    if(config.customization == null){
+        config.customization = { background: null, backgroundRandom: false, logo: null }
+    }
+    config.customization.background = background
+}
+
+/**
+ * Saber si el fondo debe ser aleatorio en cada inicio.
+ *
+ * @returns {boolean} true = aleatorio cada inicio; false = usar el fondo fijo elegido.
+ */
+exports.getBackgroundRandom = function(){
+    return config.customization?.backgroundRandom ?? false
+}
+
+/**
+ * Establecer el modo de fondo (aleatorio o fijo).
+ *
+ * @param {boolean} random true = aleatorio en cada inicio.
+ */
+exports.setBackgroundRandom = function(random){
+    if(config.customization == null){
+        config.customization = { background: null, backgroundRandom: false, logo: null }
+    }
+    config.customization.backgroundRandom = !!random
+}
+
+/**
+ * Obtener el logo personalizado elegido por el usuario.
+ *
+ * @returns {string|null} Ruta relativa del logo o null para el por defecto (SealCircle.png).
+ */
+exports.getSelectedLogo = function(){
+    return config.customization?.logo ?? null
+}
+
+/**
+ * Establecer el logo personalizado.
+ *
+ * @param {string|null} logo Ruta relativa del logo o null para el por defecto.
+ */
+exports.setSelectedLogo = function(logo){
+    if(config.customization == null){
+        config.customization = { background: null, backgroundRandom: false, logo: null }
+    }
+    config.customization.logo = logo
 }
 
 // Installation Management

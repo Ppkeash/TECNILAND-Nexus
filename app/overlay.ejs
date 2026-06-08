@@ -162,6 +162,28 @@
         </div>
     </div>
 
+    <!-- ==================== CUSTOMIZE OVERLAY (fondo + logo) ==================== -->
+    <div id="customizeContent" style="display: none; max-width: 860px; width: 80%; max-height: 80vh; overflow-y: auto; padding: 30px; background: rgba(0,0,0,0.65); border-radius: 12px; backdrop-filter: blur(6px);">
+        <span style="display: block; font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 4px;"><%- lang('overlay.customizeTitle') %></span>
+        <span style="display: block; font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 22px;"><%- lang('overlay.customizeSubtitle') %></span>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+            <span style="font-size: 15px; font-weight: 600; color: #fff;"><%- lang('overlay.customizeBackgrounds') %></span>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: rgba(255,255,255,0.75); cursor: pointer;">
+                <input type="checkbox" id="customizeRandomBgToggle" style="width: 16px; height: 16px; cursor: pointer;">
+                <%- lang('overlay.customizeRandomBg') %>
+            </label>
+        </div>
+        <div id="customizeBackgroundGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 26px;"></div>
+
+        <div style="font-size: 15px; font-weight: 600; color: #fff; margin-bottom: 10px;"><%- lang('overlay.customizeLogos') %></div>
+        <div id="customizeLogoGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 12px; margin-bottom: 26px;"></div>
+
+        <div style="text-align: right;">
+            <button id="customizeCloseBtn" class="overlayKeybindEsc" style="padding: 10px 24px; border-radius: 8px; border: none; background: #e74c32; color: #fff; font-weight: 600; cursor: pointer;"><%- lang('overlay.customizeClose') %></button>
+        </div>
+    </div>
+
     <!-- ==================== SKIN EDITOR OVERLAY ==================== -->
     <!-- 
         Editor de Skin para cuentas offline de TECNILAND Nexus.
@@ -298,3 +320,74 @@
         <span class="contextMenuLabel">Eliminar instalación</span>
     </div>
 </div>
+
+<!-- ==================== TECNILAND AUTH MODAL OVERLAY ==================== -->
+<!-- Este overlay es independiente del flujo de login y puede abrirse desde cualquier vista -->
+<div id="tecnilandAuthOverlay" style="display: none;">
+    <div id="tecnilandAuthModalContainer">
+        <!-- Botón de cerrar -->
+        <div id="tecnilandAuthCancelContainer">
+            <button id="tecnilandAuthCancelBtn" type="button">
+                <span id="tecnilandAuthCancelIcon">✕</span>
+                <span id="tecnilandAuthCancelText"><%- lang('login.loginCancelText') %></span>
+            </button>
+        </div>
+        
+        <!-- Contenido del modal -->
+        <div id="tecnilandAuthModalContent">
+            <form id="tecnilandAuthModalForm">
+                <img id="tecnilandAuthModalLogo" src="assets/images/SealCircle.png"/>
+                <span id="tecnilandAuthModalSubheader"><%- lang('overlay.tecniland.loginTitle') %></span>
+                
+                <!-- Error Message -->
+                <span class="loginErrorSpan tecnilandErrorSpan" id="tecnilandAuthModalError" style="display: none;"></span>
+                
+                <!-- Login Fields -->
+                <div id="tecnilandAuthModalFields">
+                    <div class="loginFieldContainer tecnilandFieldContainer">
+                        <svg class="loginSVG tecnilandSVG" viewBox="40 37 65.36 61.43">
+                            <g>
+                                <path d="M86.77,58.12A13.79,13.79,0,1,0,73,71.91,13.79,13.79,0,0,0,86.77,58.12M97,103.67a3.41,3.41,0,0,0,3.39-3.84,27.57,27.57,0,0,0-54.61,0,3.41,3.41,0,0,0,3.39,3.84Z"/>
+                            </g>
+                        </svg>
+                        <input id="tecnilandAuthModalUsername" class="loginField tecnilandField" type="text" placeholder="<%- lang('overlay.tecniland.usernamePlaceholder') %>" autocomplete="username"/>
+                    </div>
+                    <div class="loginFieldContainer tecnilandFieldContainer">
+                        <svg class="loginSVG tecnilandSVG" viewBox="40 32 60.36 70.43">
+                            <g>
+                                <path d="M86.16,54a16.38,16.38,0,1,0-32,0H44V102.7H96V54Zm-25.9-3.39a9.89,9.89,0,1,1,19.77,0A9.78,9.78,0,0,1,79.39,54H60.89A9.78,9.78,0,0,1,60.26,50.59ZM70,96.2a6.5,6.5,0,0,1-6.5-6.5,6.39,6.39,0,0,1,3.1-5.4V67h6.5V84.11a6.42,6.42,0,0,1,3.39,5.6A6.5,6.5,0,0,1,70,96.2Z"/>
+                            </g>
+                        </svg>
+                        <input id="tecnilandAuthModalPassword" class="loginField tecnilandField" type="password" placeholder="<%- lang('overlay.tecniland.passwordPlaceholder') %>" autocomplete="current-password"/>
+                    </div>
+                </div>
+                
+                <!-- Botón de Login -->
+                <button id="tecnilandAuthModalLoginBtn" type="button" class="tecnilandSubmitBtn" disabled>
+                    <div id="tecnilandAuthModalLoginContent">
+                        <%- lang('overlay.tecniland.loginButton') %>
+                        <svg class="tecnilandArrowSVG" viewBox="0 0 24.87 13.97">
+                            <defs>
+                                <style>.tecnilandModalArrowLine{fill:none;stroke:#FFF;stroke-width:2px;transition: 0.25s ease;}</style>
+                            </defs>
+                            <polyline class="tecnilandModalArrowLine" points="0.71 13.26 12.56 1.41 24.16 13.02"/>
+                        </svg>
+                        <div class="circle-loader">
+                            <div class="checkmark draw"></div>
+                        </div>
+                    </div>
+                </button>
+                
+                <!-- Footer con enlace de registro -->
+                <div id="tecnilandAuthModalFooter">
+                    <p class="loginDisclaimerText"><%- lang('overlay.tecniland.loginDescription') %></p>
+                    <div class="tecnilandAuthFooter">
+                        <span class="loginSpanDim"><%- lang('overlay.tecniland.noAccountText') %> </span>
+                        <a href="#" id="tecnilandAuthModalRegisterLink" class="tecnilandRegisterLink"><%- lang('overlay.tecniland.registerHereLink') %></a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<!-- ==================== FIN TECNILAND AUTH MODAL OVERLAY ==================== -->

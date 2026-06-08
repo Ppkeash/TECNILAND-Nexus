@@ -18,7 +18,13 @@ const { AZURE_CLIENT_ID }    = require('./ipcconstants')
 const Lang = require('./langloader')
 const crypto = require('crypto')
 
+// TECNILAND Auth Integration
+const TecnilandAuthManager = require('./tecnilandauth/TecnilandAuthManager')
+
 const log = LoggerUtil.getLogger('AuthManager')
+
+// Export TecnilandAuthManager for external use
+exports.TecnilandAuth = TecnilandAuthManager
 
 // Error messages
 
@@ -603,5 +609,189 @@ exports.updateOfflineAccountUUID = async function(currentUuid, newUuid) {
             title: 'Update Failed',
             desc: 'Failed to update the offline account UUID.'
         })
+    }
+}
+
+// =============================================================================
+// TECNILAND Account Functions
+// =============================================================================
+
+/**
+ * Add a TECNILAND account. This will authenticate against the TECNILAND
+ * backend server using the Yggdrasil protocol.
+ * 
+ * @param {string} username The account username or email.
+ * @param {string} password The account password.
+ * @returns {Promise.<Object>} Promise which resolves the account object.
+ */
+exports.addTecnilandAccount = async function(username, password) {
+    try {
+        // First, login to get JWT token
+        const loginResult = await TecnilandAuthManager.login(username, password)
+        
+        if (!loginResult.success) {
+            return Promise.reject(tecnilandErrorDisplayable(loginResult.error))
+        }
+        
+        // Then authenticate via Yggdrasil for Minecraft compatibility
+        const yggdrasilResult = await TecnilandAuthManager.authenticateYggdrasil(username, password)
+        
+        if (!yggdrasilResult.success) {
+            return Promise.reject(tecnilandErrorDisplayable(yggdrasilResult.error))
+        }
+        
+        const session = TecnilandAuthManager.loadSession()
+        
+        // Add account to config
+        const ret = ConfigManager.addTecnilandAuthAccount(
+            session.uuid,
+            session.accessToken,
+            session.username,
+            session.displayName || session.username,
+            session.email,
+            session.clientToken,
+            session.yggdrasilToken
+        )
+        
+        ConfigManager.save()
+        log.info(`TECNILAND account added: ${session.username}`)
+        
+        return ret
+        
+    } catch (err) {
+        log.error('Error adding TECNILAND account:', err)
+        return Promise.reject({
+            title: Lang.queryJS('auth.tecniland.error.genericTitle') || 'Error de Autenticación',
+            desc: err.message || Lang.queryJS('auth.tecniland.error.genericDesc') || 'No se pudo agregar la cuenta TECNILAND.'
+        })
+    }
+}
+
+/**
+ * Remove a TECNILAND account.
+ * 
+ * @param {string} uuid The UUID of the account to be removed.
+ * @returns {Promise.<void>} Promise which resolves when the account is removed.
+ */
+exports.removeTecnilandAccount = async function(uuid) {
+    try {
+        // Invalidate session on server
+        await TecnilandAuthManager.logout()
+        
+        // Remove from local config
+        ConfigManager.removeAuthAccount(uuid)
+        ConfigManager.save()
+        
+        log.info(`TECNILAND account removed: ${uuid}`)
+        return Promise.resolve()
+        
+    } catch (err) {
+        log.error('Error removing TECNILAND account:', err)
+        // Still remove locally even if server logout fails
+        ConfigManager.removeAuthAccount(uuid)
+        ConfigManager.save()
+        return Promise.resolve()
+    }
+}
+
+/**
+ * Validate the selected TECNILAND account with the authentication server.
+ * 
+ * @returns {Promise.<boolean>} Promise which resolves to true if validation succeeds.
+ */
+exports.validateSelectedTecnilandAccount = async function() {
+    const current = ConfigManager.getSelectedAccount()
+    
+    if (!current || current.type !== 'tecniland') {
+        return Promise.resolve(true)
+    }
+    
+    try {
+        // First try to validate the Yggdrasil token
+        const validateResult = await TecnilandAuthManager.validateYggdrasilToken(
+            current.yggdrasilToken || current.accessToken,
+            current.clientToken
+        )
+        
+        if (validateResult.success) {
+            log.info('TECNILAND Yggdrasil token validated successfully.')
+            return true
+        }
+        
+        // Token invalid, try to refresh
+        log.info('TECNILAND token invalid, attempting refresh...')
+        const refreshResult = await TecnilandAuthManager.refreshYggdrasil(
+            current.yggdrasilToken || current.accessToken,
+            current.clientToken
+        )
+        
+        if (refreshResult.success) {
+            // Update tokens in config
+            ConfigManager.updateTecnilandAuthAccount(current.uuid, {
+                accessToken: refreshResult.accessToken,
+                yggdrasilToken: refreshResult.accessToken,
+                clientToken: refreshResult.clientToken
+            })
+            ConfigManager.save()
+            
+            log.info('TECNILAND token refreshed successfully.')
+            return true
+        }
+        
+        // Refresh failed, account needs re-authentication
+        log.warn('TECNILAND token refresh failed, re-authentication required.')
+        return false
+        
+    } catch (err) {
+        log.error('Error validating TECNILAND account:', err)
+        return false
+    }
+}
+
+/**
+ * Helper function to display TECNILAND-specific errors.
+ * 
+ * @param {string} errorCode The error code from TECNILAND API.
+ * @returns {Object} Object containing title and desc for the error.
+ */
+function tecnilandErrorDisplayable(errorCode) {
+    const errors = {
+        'INVALID_CREDENTIALS': {
+            title: Lang.queryJS('auth.tecniland.error.invalidCredentialsTitle') || 'Credenciales Inválidas',
+            desc: Lang.queryJS('auth.tecniland.error.invalidCredentialsDesc') || 'El usuario o contraseña son incorrectos.'
+        },
+        'ACCOUNT_NOT_FOUND': {
+            title: Lang.queryJS('auth.tecniland.error.accountNotFoundTitle') || 'Cuenta No Encontrada',
+            desc: Lang.queryJS('auth.tecniland.error.accountNotFoundDesc') || 'No existe una cuenta con ese nombre de usuario.'
+        },
+        'ACCOUNT_BANNED': {
+            title: Lang.queryJS('auth.tecniland.error.accountBannedTitle') || 'Cuenta Suspendida',
+            desc: Lang.queryJS('auth.tecniland.error.accountBannedDesc') || 'Esta cuenta ha sido suspendida.'
+        },
+        'EMAIL_NOT_VERIFIED': {
+            title: Lang.queryJS('auth.tecniland.error.emailNotVerifiedTitle') || 'Email No Verificado',
+            desc: Lang.queryJS('auth.tecniland.error.emailNotVerifiedDesc') || 'Debes verificar tu email antes de iniciar sesión.'
+        },
+        'SERVER_ERROR': {
+            title: Lang.queryJS('auth.tecniland.error.serverErrorTitle') || 'Error del Servidor',
+            desc: Lang.queryJS('auth.tecniland.error.serverErrorDesc') || 'El servidor TECNILAND no está disponible.'
+        },
+        'NETWORK_ERROR': {
+            title: Lang.queryJS('auth.tecniland.error.networkErrorTitle') || 'Error de Conexión',
+            desc: Lang.queryJS('auth.tecniland.error.networkErrorDesc') || 'No se pudo conectar con el servidor TECNILAND.'
+        },
+        'USERNAME_EXISTS': {
+            title: Lang.queryJS('auth.tecniland.error.usernameExistsTitle') || 'Usuario Existente',
+            desc: Lang.queryJS('auth.tecniland.error.usernameExistsDesc') || 'Este nombre de usuario ya está en uso.'
+        },
+        'EMAIL_EXISTS': {
+            title: Lang.queryJS('auth.tecniland.error.emailExistsTitle') || 'Email Existente',
+            desc: Lang.queryJS('auth.tecniland.error.emailExistsDesc') || 'Este email ya está registrado.'
+        }
+    }
+    
+    return errors[errorCode] || {
+        title: Lang.queryJS('auth.tecniland.error.genericTitle') || 'Error de Autenticación',
+        desc: Lang.queryJS('auth.tecniland.error.genericDesc') || 'Ocurrió un error durante la autenticación.'
     }
 }

@@ -670,6 +670,17 @@ body, button {
     margin-bottom: var(--spacing-lg);
 }
 
+/* Special logo for TECNILAND - más pequeño */
+#tecnilandLogoSeal {
+    border-radius: var(--radius-full);
+    border: 2px solid #39FF14;
+    background: var(--color-bg-card);
+    height: 90px;
+    width: 90px;
+    box-shadow: var(--shadow-sm), 0 0 15px rgba(57, 255, 20, 0.5);
+    margin-bottom: 15px;
+}
+
 /* Header on login view. */
 #loginSubheader,
 #loginOfflineSubheader {
@@ -739,7 +750,7 @@ body, button {
     border-width: 1.5px 0px 0px 0px;
     border-style: solid;
     width: 250px;
-    margin-bottom: var(--spacing-lg);
+    margin-bottom: 15px;
     border-color: var(--color-primary);
     color: var(--color-text-primary);
     font-weight: bold;
@@ -1008,9 +1019,180 @@ body, button {
     font-size: 12px;
     font-weight: bold;
     letter-spacing: 2px;
-    color: #fff;
+    color: rgba(255, 255, 255, 0.7);
     text-align: center;
     margin-bottom: 20px;
+}
+
+/* ================================
+   TECNILAND LOGIN STYLES
+   ================================ */
+
+/* TECNILAND content container - matches Offline pattern */
+#loginTecnilandContent {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+/* TECNILAND login form */
+#loginTecnilandForm {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* TECNILAND subheader */
+#loginTecnilandSubheader {
+    font-family: var(--font-medium);
+    font-size: var(--font-size-base);
+    font-weight: bold;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.85);
+    text-align: center;
+    margin-bottom: 15px;
+    display: block;
+    width: 100%;
+}
+
+/* TECNILAND tabs container */
+#tecnilandAuthTabs {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 15px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 4px;
+    border-radius: 6px;
+    width: 250px;
+}
+
+/* TECNILAND tab buttons */
+.tecnilandTabBtn {
+    flex: 1;
+    padding: 8px 16px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: rgba(255, 255, 255, 0.5);
+    font-family: var(--font-primary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    letter-spacing: 0.5px;
+}
+
+/* TECNILAND SVG icons */
+.tecnilandSVG {
+    fill: #39FF14;
+}
+
+/* TECNILAND input fields */
+.tecnilandField {
+    border-color: #39FF14;
+}
+
+.tecnilandField:focus {
+    border-color: #39FF14;
+    box-shadow: 0 0 10px rgba(57, 255, 20, 0.3);
+}
+
+/* TECNILAND error spans */
+.tecnilandErrorSpan {
+    color: #ff4444;
+}
+
+/* TECNILAND login button - igual que #loginButton pero con verde */
+#tecnilandLoginButton {
+    background: none;
+    font-weight: bold;
+    letter-spacing: 2px;
+    border: none;
+    padding: var(--spacing-md) var(--spacing-xs);
+    margin: var(--spacing-sm) 0px;
+    cursor: pointer;
+    position: relative;
+    right: -20px;
+    transition: color var(--transition-slow), text-shadow var(--transition-slow);
+}
+
+#tecnilandLoginButton:disabled {
+    color: var(--color-text-disabled);
+    pointer-events: none;
+}
+
+#tecnilandLoginButton[loading] {
+    color: #39FF14;
+}
+
+#tecnilandLoginButton:hover,
+#tecnilandLoginButton:focus {
+    text-shadow: 0px 0px 15px #39FF14;
+    color: #39FF14;
+    outline: none;
+}
+
+#tecnilandLoginButton:active {
+    color: #2ACC0F;
+    text-shadow: 0px 0px 15px #2ACC0F;
+}
+
+/* SVG flecha para botón TECNILAND */
+#tecnilandLoginSVG {
+    -webkit-transform: translate3d(0, 0, 0);
+    overflow: visible;
+    transform: rotate(90deg);
+    margin-left: var(--spacing-lg);
+    transition: filter var(--transition-base);
+    width: 20px;
+    height: 20px;
+}
+
+#tecnilandLoginButton:hover #tecnilandLoginSVG,
+#tecnilandLoginButton:focus #tecnilandLoginSVG {
+    -webkit-filter: drop-shadow(0px 0px 5px #39FF14);
+    filter: drop-shadow(0px 0px 5px #39FF14);
+}
+
+#tecnilandLoginButton:active #tecnilandLoginSVG .tecnilandArrowLine {
+    stroke: #2ACC0F;
+}
+
+#tecnilandLoginButton:active #tecnilandLoginSVG {
+    -webkit-filter: drop-shadow(0px 0px 5px #2ACC0F);
+    filter: drop-shadow(0px 0px 5px #2ACC0F);
+}
+
+#tecnilandLoginButton:disabled #tecnilandLoginSVG .tecnilandArrowLine {
+    stroke: var(--color-text-disabled);
+}
+
+#tecnilandLoginButtonContent {
+    display: flex;
+    align-items: center;
+}
+
+#tecnilandLoginButton .circle-loader,
+#tecnilandLoginButton[loading] #tecnilandLoginSVG {
+    display: none;
+}
+
+#tecnilandLoginButton[loading] .circle-loader,
+#tecnilandLoginButton #tecnilandLoginSVG {
+    display: initial;
+}
+
+/* TECNILAND disclaimer */
+#loginTecnilandDisclaimer {
+    margin-top: 10px;
+}
+
+#loginTecnilandDisclaimer .loginDisclaimerText {
+    font-size: 11px;
+    margin: 5px 0;
+    line-height: 1.3;
 }
 
 /* Offline profile SVG */
@@ -2017,6 +2199,12 @@ input:checked + .toggleSwitchSlider:before {
 .badgeOffline {
     background: #666;
     color: #ddd;
+}
+
+.badgeTecniland {
+    background: linear-gradient(135deg, #00d26a 0%, #00b85e 50%, #39FF14 100%);
+    color: #000;
+    text-shadow: 0 0 2px rgba(255, 255, 255, 0.3);
 }
 
 /* * *
@@ -3078,6 +3266,15 @@ input:checked + .toggleSwitchSlider:before {
     display: block;
     margin: 0 auto;
 }
+/* Cover image for news articles from API */
+#newsArticleContentScrollable .newsArticleCoverImage {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    margin-bottom: 15px;
+    object-fit: cover;
+}
 #newsArticleContentScrollable a {
     color: rgba(202, 202, 202, 0.75);
     transition: 0.25s ease;
@@ -3408,6 +3605,37 @@ input:checked + .toggleSwitchSlider:before {
 }
 #avatarOverlay:active {
     background-color: rgba(0, 0, 0, 0.55);
+}
+
+/* SkinViewer3D Canvas Styles */
+#avatarContainer canvas {
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: var(--radius-full);
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+#avatarContainer.skinviewer3d-active {
+    background-image: none !important;
+    background-color: transparent !important;
+}
+
+/* Settings 3D skin viewer container */
+.skin-viewer-3d-container {
+    width: 150px;
+    height: 200px;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    margin: 10px 0;
+}
+
+.skin-viewer-3d-container canvas {
+    width: 100% !important;
+    height: 100% !important;
 }
 
 /* User profile name text. */
@@ -4295,14 +4523,59 @@ input:checked + .toggleSwitchSlider:before {
 }
 
 @keyframes pulse-update {
-    0%, 100% { 
+    0%, 100% {
         opacity: 1;
         box-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
     }
-    50% { 
+    50% {
         opacity: 0.7;
         box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
     }
+}
+
+/* Badge "En mantenimiento" en la lista de modpacks. */
+.server-badge-maintenance {
+    font-size: 9px;
+    padding: 2px 6px;
+    background: rgba(255, 136, 0, 0.2);
+    border: 1px solid rgba(255, 136, 0, 0.6);
+    border-radius: 3px;
+    color: #ff8800;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-shadow: 0 0 5px rgba(255, 136, 0, 0.3);
+}
+
+/* Mensaje de mantenimiento mostrado en la tarjeta del modpack. */
+.server-maintenance-msg {
+    flex-basis: 100%;
+    margin-top: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #ffb04d;
+    letter-spacing: 0.3px;
+    text-shadow: 0 0 4px rgba(255, 136, 0, 0.25);
+}
+
+/* Modpack en mantenimiento: aspecto bloqueado y no seleccionable. */
+.serverListing.maintenance {
+    opacity: 0.55;
+    cursor: not-allowed !important;
+    filter: grayscale(0.6);
+    position: relative;
+}
+.serverListing.maintenance:hover,
+.serverListing.maintenance:focus {
+    box-shadow: none !important;
+    border-color: rgba(255, 136, 0, 0.5) !important;
+    transform: none !important;
+}
+.serverListing.maintenance .serverListingImg {
+    filter: grayscale(1);
+}
+.serverListing.maintenance[selected] {
+    border-color: rgba(255, 136, 0, 0.5) !important;
 }
 
 /* The minecraft version of the server listing. */
@@ -4400,6 +4673,15 @@ input:checked + .toggleSwitchSlider:before {
 #accountSelectConfirm:active {
     border-color: rgba(255, 255, 255, 0.75);
     color: rgba(255, 255, 255, 0.75);
+}
+#serverSelectConfirm:disabled,
+#serverSelectConfirm[disabled] {
+    opacity: 0.4;
+    cursor: not-allowed;
+    border-color: rgba(255, 255, 255, 0.35);
+    color: rgba(255, 255, 255, 0.4);
+    box-shadow: none;
+    pointer-events: none;
 }
 
 /* Server selection cancel button styles. */
@@ -6554,3 +6836,377 @@ input:checked + .toggleSwitchSlider:before {
     50% { transform: scale(1.03); }
     100% { transform: scale(1); }
 }
+
+/*******************************************************************************
+ *                                                                             *
+ * TECNILAND AUTHENTICATION SYSTEM                                            *
+ *                                                                             *
+ ******************************************************************************/
+
+/* ==================== TECNILAND AUTH OVERLAY ==================== */
+/* Overlay modal independiente que se superpone sobre cualquier vista */
+
+#tecnilandAuthOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: tecnilandFadeIn 0.3s ease;
+}
+
+#tecnilandAuthModalContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 30px;
+    max-width: 400px;
+    width: 90%;
+}
+
+#tecnilandAuthCancelContainer {
+    position: absolute;
+    top: -45px;
+    right: 0;
+}
+
+#tecnilandAuthCancelBtn {
+    background: none;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    font-size: 14px;
+    padding: 8px 12px;
+}
+
+#tecnilandAuthCancelBtn:hover {
+    color: #39FF14;
+    text-shadow: 0 0 10px rgba(57, 255, 20, 0.5);
+}
+
+#tecnilandAuthCancelIcon {
+    font-size: 14px;
+    font-weight: bold;
+}
+
+#tecnilandAuthCancelText {
+    font-family: var(--font-medium);
+}
+
+@keyframes tecnilandFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+#tecnilandAuthModalContent {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+#tecnilandAuthModalForm {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+#tecnilandAuthModalLogo {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 15px;
+    filter: drop-shadow(0 0 15px rgba(57, 255, 20, 0.5));
+}
+
+#tecnilandAuthModalSubheader {
+    font-family: var(--font-medium);
+    margin-bottom: 25px;
+    font-size: 16px;
+    letter-spacing: 1px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+#tecnilandAuthModalFields {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+#tecnilandAuthModalFooter {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    width: 100%;
+    margin-top: 15px;
+}
+
+.tecnilandArrowSVG {
+    width: 12px;
+    height: 12px;
+    margin-left: 8px;
+    transition: transform 0.25s ease;
+}
+
+/* Logo */
+#tecnilandLogoContainer,
+#tecnilandLogoContainerReg {
+    margin-bottom: 15px;
+}
+
+.tecnilandLogoSVG {
+    filter: drop-shadow(0 0 20px rgba(57, 255, 20, 0.6));
+    animation: tecnilandPulse 2s ease-in-out infinite;
+}
+
+@keyframes tecnilandPulse {
+    0%, 100% { filter: drop-shadow(0 0 20px rgba(57, 255, 20, 0.6)); }
+    50% { filter: drop-shadow(0 0 30px rgba(57, 255, 20, 0.9)); }
+}
+
+/* Subheader */
+#tecnilandSubheader,
+#tecnilandSubheaderReg {
+    font-family: var(--font-medium);
+    margin-bottom: 20px;
+    font-size: var(--font-size-base);
+    letter-spacing: 1px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* Auth Tabs */
+#tecnilandAuthTabs,
+#tecnilandAuthTabsReg {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 25px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 4px;
+    border-radius: 6px;
+}
+
+.tecnilandTabBtn {
+    padding: 10px 25px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: rgba(255, 255, 255, 0.5);
+    font-family: var(--font-primary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+
+.tecnilandTabBtn:hover:not(.active) {
+    color: rgba(255, 255, 255, 0.75);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.tecnilandTabBtn.active {
+    background: rgba(57, 255, 20, 0.25);
+    color: #39FF14;
+    font-weight: bold;
+    box-shadow: 0 0 10px rgba(57, 255, 20, 0.2);
+}
+
+/* Error message */
+.tecnilandErrorSpan {
+    background: rgba(255, 107, 107, 0.15);
+    border: 1px solid rgba(255, 107, 107, 0.3);
+    border-radius: 6px;
+    padding: 10px 15px;
+    color: #ff6b6b;
+    font-size: 12px;
+    margin-bottom: 15px;
+    width: 100%;
+    text-align: center;
+    animation: shake 0.5s ease;
+}
+
+/* Field Container */
+.tecnilandFieldContainer {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+/* SVG Icons */
+.tecnilandSVG {
+    fill: #39FF14;
+    height: 20px;
+    width: 20px;
+    margin-bottom: 5px;
+    opacity: 0.8;
+}
+
+/* Input Fields - mismo estilo que .loginField */
+.tecnilandField {
+    font-family: var(--font-primary);
+    background: none;
+    border-width: 1.5px 0px 0px 0px;
+    border-style: solid;
+    width: 250px;
+    margin-bottom: 15px;
+    border-color: #39FF14;
+    color: var(--color-text-primary);
+    font-weight: bold;
+    text-align: center;
+    box-sizing: border-box;
+    padding: 10px;
+    font-size: var(--font-size-sm);
+    letter-spacing: 1px;
+    transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.tecnilandField:focus {
+    outline: none;
+    border-color: #4dff33;
+    box-shadow: 0 1px 0 0 #4dff33;
+}
+
+.tecnilandField:disabled {
+    color: var(--color-text-disabled);
+    border-color: var(--color-border-secondary);
+}
+
+.tecnilandField::-webkit-input-placeholder {
+    color: var(--color-text-disabled);
+    font-size: var(--font-size-sm);
+    letter-spacing: 1px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.tecnilandField:focus::-webkit-input-placeholder {
+    color: transparent;
+}
+
+/* Submit Button - mismo estilo que #loginButton pero con verde */
+.tecnilandSubmitBtn {
+    background: none;
+    font-weight: bold;
+    letter-spacing: 2px;
+    border: none;
+    padding: 12px 5px;
+    margin: 10px 0px;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    transition: color var(--transition-slow), text-shadow var(--transition-slow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tecnilandSubmitBtn:disabled {
+    color: var(--color-text-disabled);
+    pointer-events: none;
+}
+
+.tecnilandSubmitBtn:hover,
+.tecnilandSubmitBtn:focus {
+    text-shadow: 0 0 20px rgba(57, 255, 20, 0.8);
+    color: #39FF14;
+    outline: none;
+}
+
+.tecnilandSubmitBtn:active {
+    color: #2ACC0F;
+    text-shadow: 0px 0px 15px #2ACC0F;
+}
+
+/* Footer con enlace de registro - CENTRADO y color VERDE */
+.tecnilandAuthFooter {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    margin-top: 15px;
+    text-align: center;
+    width: 100%;
+}
+
+.tecnilandRegisterLink {
+    color: #39FF14 !important;
+    text-decoration: none;
+    font-weight: bold;
+    transition: all 0.25s ease;
+}
+
+.tecnilandRegisterLink:hover {
+    color: #4dff33 !important;
+    text-shadow: 0 0 10px rgba(57, 255, 20, 0.6);
+    text-decoration: underline;
+}
+
+/* Contenedor del disclaimer de login TECNILAND - centrado */
+#loginTecnilandDisclaimer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    width: 100%;
+    margin-top: 10px;
+}
+
+/* ==================== TECNILAND LOGIN OPTIONS BUTTON ==================== */
+/* Mantiene consistencia con los demás botones de login */
+
+.loginOptionButtonContainer.tecniland-featured {
+    margin-bottom: 5px;
+}
+
+.loginOptionButton.tecniland-button {
+    border: 1px solid rgba(57, 255, 20, 0.4);
+}
+
+.loginOptionButton.tecniland-button:hover,
+.loginOptionButton.tecniland-button:focus {
+    background: rgba(57, 255, 20, 0.15);
+    border-color: #39FF14;
+    box-shadow: 0 0 15px rgba(57, 255, 20, 0.3);
+}
+
+.loginOptionButton.tecniland-button span {
+    color: #39FF14;
+}
+
+.loginOptionsDivider {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin: 15px 0;
+    color: var(--color-text-tertiary);
+    font-size: 12px;
+}
+
+.loginOptionsDivider::before,
+.loginOptionsDivider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* ==================== FIN TECNILAND AUTHENTICATION SYSTEM ==================== */

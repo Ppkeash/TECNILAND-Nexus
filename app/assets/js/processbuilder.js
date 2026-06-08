@@ -10,6 +10,8 @@ const path                  = require('path')
 
 const ConfigManager            = require('./configmanager')
 const JavaManager              = require('./javamanager')
+const TecnilandAuthManager     = require('./tecnilandauth/TecnilandAuthManager')
+const CustomSkinLoaderManager  = require('./customskinloader/CustomSkinLoaderManager')
 
 const logger = LoggerUtil.getLogger('ProcessBuilder')
 
@@ -86,9 +88,62 @@ class ProcessBuilder {
     }
     
     /**
+     * Get authlib-injector JVM arguments for TECNILAND accounts.
+     * This allows Minecraft to authenticate against the TECNILAND server.
+     * 
+     * @returns {Array<string>} Array of JVM arguments for authlib-injector, or empty array.
+     */
+    _getTecnilandAuthArgs() {
+        if (this.authUser.type !== 'tecniland') {
+            return []
+        }
+        
+        try {
+            const args = TecnilandAuthManager.getAuthlibInjectorArgs()
+            
+            if (args.length > 0) {
+                logger.info('[ProcessBuilder] Using authlib-injector for Yggdrasil authentication')
+            }
+            
+            return args
+        } catch (err) {
+            logger.error('Error getting TECNILAND auth args:', err)
+            return []
+        }
+    }
+    
+    /**
+     * Determina el tipo de mod loader de la instancia actual.
+     * Utiliza los flags detectados durante build().
+     * 
+     * @returns {string} 'fabric' | 'quilt' | 'forge' | 'neoforge' | 'optifine' | 'vanilla'
+     */
+    _getModLoaderType() {
+        if (this.usingFabricLoader) return 'fabric'
+        if (this.usingQuiltLoader) return 'quilt'
+        if (this.usingNeoForgeLoader) return 'neoforge'
+        if (this.usingOptiFine) return 'optifine'
+        
+        // Detectar Forge: cuando modManifest !== vanillaManifest y no es ningún otro loader
+        if (this.modManifest && this.modManifest !== this.vanillaManifest) {
+            // Si tiene libraries con 'forge' o 'minecraftforge', es Forge
+            if (this.modManifest.libraries) {
+                for (const lib of this.modManifest.libraries) {
+                    const libName = (lib.name || '').toLowerCase()
+                    if (libName.includes('minecraftforge') || libName.includes('net.minecraftforge:forge')) {
+                        return 'forge'
+                    }
+                }
+            }
+        }
+        
+        return 'vanilla'
+    }
+    
+    /**
      * Convienence method to run the functions typically used to build a process.
      */
-    build(){
+    async build(){
         fs.ensureDirSync(this.gameDir)
         
         const tempNativePath = path.join(os.tmpdir(), ConfigManager.getTempNativeFolder(), crypto.pseudoRandomBytes(16).toString('hex'))
@@ -263,11 +318,36 @@ class ProcessBuilder {
         // This is the Java that was validated by JavaManager before launch
         let javaExecutable = ConfigManager.getJavaExecutable(this.server.rawServer.id)
         
-        // Log which Java we're using
+        // ⚠️ CRITICAL VALIDATION: ALWAYS verify Java compatibility before launch
+        // This is a safety net in case landing.js validation was bypassed
         const mcVersion = this.server.rawServer.minecraftVersion
         const javaReqs = JavaManager.getJavaRequirements(mcVersion)
         logger.info(`Launching Minecraft ${mcVersion} (requires Java ${javaReqs.min}-${javaReqs.max}, recommended: ${javaReqs.recommended})`)
-        logger.info(`Using Java executable: ${javaExecutable}`)
+        
+        if (!javaExecutable) {
+            throw new Error(`❌ CRITICAL: No Java executable configured for Minecraft ${mcVersion}. This should have been detected by landing.js.`)
+        }
+        
+        // Validate Java version BEFORE launching
+        const javaValidation = await JavaManager.validateJavaForMinecraft(javaExecutable, mcVersion)
+        
+        if (!javaValidation.compatible) {
+            logger.error('❌ CRITICAL JAVA INCOMPATIBILITY DETECTED ❌')
+            logger.error(`   Java: ${javaExecutable}`)
+            logger.error(`   Version: Java ${javaValidation.majorVersion || 'unknown'}`)
+            logger.error(`   Required: Java ${javaReqs.min}-${javaReqs.max} (recommended: ${javaReqs.recommended})`)
+            logger.error(`   Minecraft: ${mcVersion}`)
+            logger.error('   THIS SHOULD HAVE BEEN CAUGHT BY landing.js!')
+            
+            throw new Error(
+                `Java ${javaValidation.majorVersion || 'unknown'} is NOT compatible with Minecraft ${mcVersion}.\n` +
+                `Required: Java ${javaReqs.min}-${javaReqs.max} (recommended: Java ${javaReqs.recommended}).\n\n` +
+                `Please go to Settings > Java and select a compatible Java version, or let the launcher download it automatically.`
+            )
+        }
+        
+        logger.info(`✅ Using Java ${javaValidation.majorVersion}: ${javaExecutable}`)
+        logger.info(`   Validation: ${javaValidation.message}`)
         
         // Log loader detection (condensado)
         if (this.usingNeoForgeLoader || this.usingFabricLoader || this.usingQuiltLoader) {
@@ -426,6 +506,35 @@ class ProcessBuilder {
         }
         
         logger.info('=== END SPAWN ARGUMENTS DEBUG ===')
+
+        // ============================================================
+        // CustomSkinLoader Setup (skins para singleplayer)
+        // Se ejecuta async pero no bloquea el lanzamiento.
+        // La primera vez descargará el mod, luego solo actualizará config.
+        // ============================================================
+        const modLoaderType = this._getModLoaderType()
+        const cslUsername = this.authUser.displayName || this.authUser.username || 'Player'
+        
+        if (modLoaderType !== 'vanilla' && this.authUser.type === 'tecniland') {
+            logger.info(`[CSL] Preparing CustomSkinLoader for ${mcVersion} (${modLoaderType})`)
+            
+            // Fire and forget: no bloquea el spawn
+            CustomSkinLoaderManager.setupForInstance(this.gameDir, mcVersion, modLoaderType, cslUsername)
+                .then(success => {
+                    if (success) {
+                        logger.info('[CSL] CustomSkinLoader ready - skins will load on next world entry')
+                    }
+                })
+                .catch(err => {
+                    logger.warn(`[CSL] Setup failed (non-blocking): ${err.message}`)
+                })
+        } else {
+            if (modLoaderType === 'vanilla') {
+                logger.info('[CSL] Skipped: Vanilla instance (no mod loader)')
+            } else if (this.authUser.type !== 'tecniland') {
+                logger.info('[CSL] Skipped: Not using TECNILAND account')
+            }
+        }
 
         const child = child_process.spawn(javaExecutable, args, {
             cwd: this.gameDir,
@@ -1190,6 +1299,11 @@ class ProcessBuilder {
 
         let args = []
 
+        // ✅ TECNILAND AUTH: Add authlib-injector args for TECNILAND accounts
+        // These must be added FIRST before any other JVM arguments
+        const tecnilandAuthArgs = this._getTecnilandAuthArgs()
+        args.push(...tecnilandAuthArgs)
+
         // Classpath Argument
         args.push('-cp')
         args.push(this.classpathArg(mods, tempNativePath).join(ProcessBuilder.getClasspathSeparator()))
@@ -1264,6 +1378,11 @@ class ProcessBuilder {
         // The vanilla manifest may be reused across multiple launches, and modifying it directly
         // causes accumulated corruption of the arguments array
         let args = JSON.parse(JSON.stringify(this.vanillaManifest.arguments.jvm))
+
+        // ✅ TECNILAND AUTH: Add authlib-injector args for TECNILAND accounts
+        // These must be added FIRST before any other JVM arguments
+        const tecnilandAuthArgs = this._getTecnilandAuthArgs()
+        args.unshift(...tecnilandAuthArgs)
 
         // Debug securejarhandler
         // args.push('-Dbsl.debug=true')
@@ -1401,8 +1520,27 @@ class ProcessBuilder {
         args.push('--assetsDir', path.join(this.commonDir, 'assets'))
         args.push('--assetIndex', this.vanillaManifest.assets)
         args.push('--uuid', this.authUser.uuid.trim())
-        args.push('--accessToken', this.authUser.type === 'offline' ? '0' : this.authUser.accessToken)
-        args.push('--userType', this.authUser.type === 'microsoft' ? 'msa' : (this.authUser.type === 'offline' ? 'legacy' : 'mojang'))
+        
+        // Access token: TECNILAND uses yggdrasilToken, offline uses '0', others use accessToken
+        if (this.authUser.type === 'offline') {
+            args.push('--accessToken', '0')
+        } else if (this.authUser.type === 'tecniland') {
+            // Use Yggdrasil token for TECNILAND accounts (for authlib-injector compatibility)
+            args.push('--accessToken', this.authUser.yggdrasilToken || this.authUser.accessToken)
+        } else {
+            args.push('--accessToken', this.authUser.accessToken)
+        }
+        
+        // User type: Microsoft = msa, TECNILAND = mojang (via Yggdrasil), Offline = legacy, others = mojang
+        if (this.authUser.type === 'microsoft') {
+            args.push('--userType', 'msa')
+        } else if (this.authUser.type === 'offline') {
+            args.push('--userType', 'legacy')
+        } else {
+            // TECNILAND and Mojang both use 'mojang' type (Yggdrasil protocol)
+            args.push('--userType', 'mojang')
+        }
+        
         args.push('--versionType', this.vanillaManifest.type)
         
         // Resolución (si está configurada)
@@ -1568,11 +1706,25 @@ class ProcessBuilder {
                         break
                     case 'auth_access_token':
                         // For offline accounts, use dummy token
-                        val = this.authUser.type === 'offline' ? '0' : this.authUser.accessToken
+                        // For TECNILAND accounts, use yggdrasilToken
+                        if (this.authUser.type === 'offline') {
+                            val = '0'
+                        } else if (this.authUser.type === 'tecniland') {
+                            val = this.authUser.yggdrasilToken || this.authUser.accessToken
+                        } else {
+                            val = this.authUser.accessToken
+                        }
                         break
                     case 'user_type':
-                        // Offline accounts use 'legacy' type, Microsoft uses 'msa', Mojang uses 'mojang'
-                        val = this.authUser.type === 'microsoft' ? 'msa' : (this.authUser.type === 'offline' ? 'legacy' : 'mojang')
+                        // Offline = 'legacy', Microsoft = 'msa', TECNILAND/Mojang = 'mojang'
+                        if (this.authUser.type === 'microsoft') {
+                            val = 'msa'
+                        } else if (this.authUser.type === 'offline') {
+                            val = 'legacy'
+                        } else {
+                            // TECNILAND and Mojang both use 'mojang' type (Yggdrasil protocol)
+                            val = 'mojang'
+                        }
                         break
                     case 'user_properties': // 1.8.9 and below.
                         val = '{}'

@@ -2,7 +2,16 @@ const loginOptionsCancelContainer = document.getElementById('loginOptionCancelCo
 const loginOptionMicrosoft = document.getElementById('loginOptionMicrosoft')
 const loginOptionMojang = document.getElementById('loginOptionMojang')
 const loginOptionOffline = document.getElementById('loginOptionOffline')
+const loginOptionTecniland = document.getElementById('loginOptionTecniland')
 const loginOptionsCancelButton = document.getElementById('loginOptionCancelButton')
+
+// TECNILAND Auth - use global if already loaded by another script
+let TecnilandAuthUI_LO
+try {
+    TecnilandAuthUI_LO = require('./assets/js/tecnilandauth/TecnilandAuthUI')
+} catch(e) {
+    console.warn('TecnilandAuthUI already loaded or not available')
+}
 
 let loginOptionsCancellable = false
 
@@ -16,6 +25,32 @@ function loginOptionsCancelEnabled(val){
         $(loginOptionsCancelContainer).show()
     } else {
         $(loginOptionsCancelContainer).hide()
+    }
+}
+
+// TECNILAND Account login handler
+if (loginOptionTecniland && TecnilandAuthUI_LO) {
+    loginOptionTecniland.onclick = (e) => {
+        // Inicializar TecnilandAuthUI si no está inicializado
+        if (!TecnilandAuthUI_LO.initialized) {
+            TecnilandAuthUI_LO.init()
+        }
+        
+        // Mostrar overlay de login TECNILAND
+        TecnilandAuthUI_LO.showLoginOverlay(
+            // onSuccess
+            () => {
+                if (loginOptionsViewOnLoginSuccess) {
+                    switchView(getCurrentView(), loginOptionsViewOnLoginSuccess, 500, 500)
+                }
+            },
+            // onCancel
+            () => {
+                if (loginOptionsViewOnLoginCancel) {
+                    switchView(getCurrentView(), loginOptionsViewOnLoginCancel, 500, 500)
+                }
+            }
+        )
     }
 }
 

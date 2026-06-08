@@ -183,7 +183,7 @@ ipcMain.on('autoUpdateAction', (event, arg, data, data2) => {
             
             autoUpdater.downloadUpdate()
                 .then(downloadedFiles => {
-                    logger.info(`AutoUpdater: downloadUpdate() COMPLETADO`)
+                    logger.info('AutoUpdater: downloadUpdate() COMPLETADO')
                     logger.info(`AutoUpdater: Archivos descargados: ${JSON.stringify(downloadedFiles)}`)
                 })
                 .catch(err => {
@@ -422,6 +422,14 @@ function createWindow() {
         backgroundColor: '#171614'
     })
     remoteMain.enable(win.webContents)
+    
+    // Debug: detectar errores del renderer
+    win.webContents.on('render-process-gone', (event, details) => {
+        logger.error('RENDERER CRASH:', details.reason, details.exitCode)
+    })
+    win.webContents.on('crashed', (event, killed) => {
+        logger.error('RENDERER CRASHED, killed:', killed)
+    })
 
     const data = {
         bkid: Math.floor((Math.random() * fs.readdirSync(path.join(__dirname, 'app', 'assets', 'images', 'backgrounds')).length)),
