@@ -114,6 +114,7 @@ const DEFAULT_CONFIG = {
     installations: [],
     selectedInstallation: null,
     modpackInstallations: [],  // TECNILAND Modpacks state
+    installedModpackVersions: {},  // { [serverId]: version } versión sincronizada localmente
     customization: {
         background: null,        // nombre de archivo del fondo elegido, ej. '3.jpg' (o null)
         backgroundRandom: false, // true = aleatorio en cada inicio (ignora 'background')
@@ -310,6 +311,33 @@ exports.getSelectedServer = function(def = false){
  */
 exports.setSelectedServer = function(serverID){
     config.selectedServer = serverID
+}
+
+/**
+ * Get the locally-synced version of a modpack (server). Used to detect updates:
+ * if the remote distribution declares a different version, an update is available.
+ *
+ * @param {string} serverID The modpack/server id.
+ * @returns {string|null} The stored version, or null if never installed.
+ */
+exports.getInstalledModpackVersion = function(serverID){
+    if(config.installedModpackVersions == null){
+        return null
+    }
+    return config.installedModpackVersions[serverID] ?? null
+}
+
+/**
+ * Store the locally-synced version of a modpack after a successful launch/repair.
+ *
+ * @param {string} serverID The modpack/server id.
+ * @param {string} version The version that is now present on disk.
+ */
+exports.setInstalledModpackVersion = function(serverID, version){
+    if(config.installedModpackVersions == null){
+        config.installedModpackVersions = {}
+    }
+    config.installedModpackVersions[serverID] = version
 }
 
 /**

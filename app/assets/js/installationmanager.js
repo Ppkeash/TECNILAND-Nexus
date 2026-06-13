@@ -121,7 +121,9 @@ exports.installationToServer = function(installation) {
         modules: generateModules(installation),
         javaOptions: installation.javaOptions || getDefaultJavaOptions(installation.loader.minecraftVersion),
         // Propagar información de OptiFine para el flujo de lanzamiento
-        optifine: installation.optifine || null
+        optifine: installation.optifine || null,
+        // Marca: NO es un modpack de distribución TECNILAND (la reparación no aplica).
+        __virtual: true
     }
 
     return server
@@ -430,7 +432,9 @@ exports.autoProfileToServer = function(profile) {
         effectiveVersionId: profile.versionId,
         // Marcar como auto-profile para que el launcher sepa cómo manejarlo
         isAutoProfile: true,
-        autoProfileType: profile.type
+        autoProfileType: profile.type,
+        // Marca: NO es un modpack de distribución TECNILAND (la reparación no aplica).
+        __virtual: true
     }
 
     logger.info(`Auto-profile convertido a servidor virtual: ${profile.name}`)

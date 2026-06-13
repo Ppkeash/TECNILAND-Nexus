@@ -2,6 +2,24 @@
 
 Novedades de TECNILAND Nexus.
 
+## v1.2.0 — Junio 2026
+
+### 🔧 Reparar y actualizar tus modpacks
+
+- **Aviso "Actualización nueva":** cuando preparamos cambios en un modpack, verás un
+  aviso brillante junto a *Jugar*. Un clic y tu modpack queda al día.
+- **Botón Reparar:** ahora puedes **Actualizar** (descarga lo que falte, sin tocar
+  nada tuyo) o hacer una **Reparación completa** (deja tu modpack exactamente como
+  debe estar, quitando mods sueltos que ya no van).
+- **Tus cosas, a salvo:** tus partidas, capturas y controles (`options.txt`) nunca se
+  tocan. Solo se reparan los archivos sensibles si tú lo marcas.
+- **Adiós a los fallos raros:** corregido el problema por el que a veces reaparecía un
+  mod que ya habíamos quitado. Ahora los cambios se aplican siempre a la primera.
+
+### 🔄 Actualización
+
+La actualización es automática: abre el launcher y se aplicará sola.
+
 ## v1.1.1 — Junio 2026
 
 - **Arreglo visual:** el aviso de modpack en mantenimiento ahora se ve limpio y

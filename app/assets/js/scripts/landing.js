@@ -55,6 +55,7 @@
     const JavaManager = require('./assets/js/javamanager')
     const SecurityHelper = require('./assets/js/securityhelper')
     const ModpackStatusClient = require('./assets/js/modpackstatusclient')
+    const ModpackRepair = require('./assets/js/modpackrepair')
     
     // ConfigManager e InstallationManager ya están disponibles globalmente
     // const ConfigManager = require('./assets/js/configmanager')
@@ -486,6 +487,11 @@ function updateSelectedServer(serv){
         animateSettingsTabRefresh()
     }
     setLaunchEnabled(serv != null && !underMaintenance)
+    // La reparación solo aplica a modpacks de distribución TECNILAND, no a
+    // instalaciones personalizadas ni auto-profiles (servers virtuales).
+    const isDistroServer = serv != null && !serv.rawServer.__virtual
+    setRepairButtonVisible(isDistroServer && !underMaintenance)
+    setUpdateBadgeVisible(isDistroServer && !underMaintenance && isModpackUpdateAvailable(serv))
 }
 // Real text is set in uibinder.js on distributionIndexDone.
 server_selection_button.innerHTML = '&#8226; ' + Lang.queryJS('landing.selectedServer.loading')
@@ -1091,6 +1097,8 @@ async function dlAsync(login = true) {
     let distro
 
     try {
+        // Cache-bust: evita servir un distribution.json viejo desde el edge de R2.
+        DistroAPI.bustDistroCache()
         distro = await DistroAPI.refreshDistributionOrFallback()
         onDistroRefresh(distro)
     } catch(err) {
@@ -1259,6 +1267,15 @@ async function dlAsync(login = true) {
         remote.getCurrentWindow().setProgressBar(-1)
 
         fullRepairModule.destroyReceiver()
+
+        // Sincronizar rutas gestionadas por el admin (borra sobrantes declarados como
+        // 100% gestionados, ej. config/fancymenu) y registrar la versión instalada.
+        try {
+            await ModpackRepair.syncManagedPaths(distro, serverId)
+        } catch (err) {
+            loggerLaunchSuite.warn('No se pudieron sincronizar las rutas gestionadas.', err)
+        }
+        markModpackVersionInstalled(serv)
     }
 
     setLaunchDetails(Lang.queryJS('landing.dlAsync.preparingToLaunch'))
@@ -2077,12 +2094,255 @@ async function refreshLandingForSelectedServer() {
             const underMaintenance = ModpackStatusClient.isUnderMaintenance(serverId)
             server_selection_button.innerHTML = '&#8226; ' + (underMaintenance ? Lang.queryJS('landing.noSelection') : server.rawServer.name)
             setLaunchEnabled(!underMaintenance)
+            setRepairButtonVisible(!underMaintenance)
+            setUpdateBadgeVisible(!underMaintenance && isModpackUpdateAvailable(server))
             loggerLanding.info(`Landing refreshed for modpack: ${serverId}${underMaintenance ? ' (en mantenimiento)' : ''}`)
         }
     } catch (err) {
         loggerLanding.error('Failed to refresh landing for modpack:', err)
     }
 }
+
+// ============================================================
+// REPARACIÓN / ACTUALIZACIÓN DE MODPACKS (Update / Full Repair)
+// ============================================================
+
+/**
+ * Muestra/oculta el botón de reparación según el estado de selección.
+ * Solo visible con un server de distribución seleccionado y fuera de mantenimiento.
+ * @param {boolean} show
+ */
+function setRepairButtonVisible(show){
+    const btn = document.getElementById('repair_button')
+    if(btn){
+        btn.style.display = show ? 'inline-flex' : 'none'
+    }
+}
+
+/**
+ * Muestra/oculta el aviso "ACTUALIZACIÓN NUEVA".
+ * @param {boolean} show
+ */
+function setUpdateBadgeVisible(show){
+    const badge = document.getElementById('update_available_badge')
+    if(badge){
+        badge.style.display = show ? 'inline-flex' : 'none'
+    }
+}
+
+/**
+ * ¿Hay una versión nueva del modpack respecto a la instalada localmente?
+ * Solo aplica a servers de distribución ya instalados al menos una vez.
+ * @param {object} serv HeliosServer (o {rawServer}).
+ * @returns {boolean}
+ */
+function isModpackUpdateAvailable(serv){
+    if(serv == null || serv.rawServer == null || serv.rawServer.__virtual){
+        return false
+    }
+    const installed = ConfigManager.getInstalledModpackVersion(serv.rawServer.id)
+    const remote = serv.rawServer.version
+    // Nunca instalado → no es "actualización", es instalación inicial (no se avisa).
+    return installed != null && remote != null && installed !== remote
+}
+
+/**
+ * Registra la versión del modpack como instalada y oculta el aviso de update.
+ * @param {object} serv HeliosServer.
+ */
+function markModpackVersionInstalled(serv){
+    try {
+        if(serv && serv.rawServer && !serv.rawServer.__virtual){
+            ConfigManager.setInstalledModpackVersion(serv.rawServer.id, serv.rawServer.version ?? null)
+            ConfigManager.save()
+            setUpdateBadgeVisible(false)
+        }
+    } catch(err){
+        loggerLanding.warn('No se pudo registrar la versión instalada del modpack.', err)
+    }
+}
+
+/**
+ * Verifica y descarga archivos faltantes/cambiados del server de distribución,
+ * reutilizando helios FullRepair (idéntico al flujo de lanzamiento, sin lanzar).
+ * @param {string} serverId
+ * @param {object} logger
+ * @returns {Promise<number>} número de archivos inválidos descargados.
+ */
+async function verifyAndDownloadDistroFiles(serverId, logger){
+    const fullRepairModule = new FullRepair(
+        ConfigManager.getCommonDirectory(),
+        ConfigManager.getInstanceDirectory(),
+        ConfigManager.getLauncherDirectory(),
+        serverId,
+        DistroAPI.isDevMode()
+    )
+    fullRepairModule.spawnReceiver()
+    fullRepairModule.childProcess.on('error', (err) => {
+        logger.error('Error durante la reparación', err)
+    })
+
+    try {
+        setLaunchDetails(Lang.queryJS('landing.dlAsync.validatingFileIntegrity'))
+        setLaunchPercentage(0)
+        const invalidFileCount = await fullRepairModule.verifyFiles(percent => {
+            setLaunchPercentage(percent)
+        })
+        setLaunchPercentage(100)
+
+        if(invalidFileCount > 0){
+            logger.info(`missing/changed files: ${invalidFileCount} (descargando)`)
+            setLaunchDetails(Lang.queryJS('landing.dlAsync.downloadingFiles'))
+            setLaunchPercentage(0)
+            await fullRepairModule.download(percent => {
+                setDownloadPercentage(percent)
+            })
+            setDownloadPercentage(100)
+        } else {
+            logger.info('No hay archivos faltantes ni cambiados.')
+        }
+        return invalidFileCount
+    } finally {
+        remote.getCurrentWindow().setProgressBar(-1)
+        fullRepairModule.destroyReceiver()
+    }
+}
+
+/**
+ * Ejecuta Update o Full Repair sobre el modpack seleccionado.
+ * - Update: descarga faltantes/cambiados. NO borra nada.
+ * - Full Repair: además elimina sobrantes en rutas gestionadas (con toggles).
+ *
+ * @param {string} serverId
+ * @param {object} options
+ * @param {boolean} options.prune true para Full Repair.
+ * @param {object} [options.pruneOpts] toggles de carpetas sensibles.
+ */
+async function runModpackMaintenance(serverId, { prune, pruneOpts = {} } = {}){
+    const logger = LoggerUtil.getLogger('ModpackMaintenance')
+    const repairBtn = document.getElementById('repair_button')
+
+    setLaunchEnabled(false)
+    if(repairBtn) repairBtn.disabled = true
+    toggleLaunchArea(true)
+    setLaunchDetails(Lang.queryJS('landing.dlAsync.loadingServerInfo'))
+    setLaunchPercentage(0)
+
+    try {
+        // 1) Distro fresco (cache-bust del CDN).
+        DistroAPI.bustDistroCache()
+        const distro = await DistroAPI.refreshDistributionOrFallback()
+        const server = distro.getServerById(serverId)
+        if(server == null){
+            throw new Error(`Server ${serverId} no existe en el distro.`)
+        }
+
+        // 2) Descargar faltantes/cambiados (Update y Full Repair).
+        const downloaded = await verifyAndDownloadDistroFiles(serverId, logger)
+
+        // 3) Sincronizar rutas gestionadas por el admin (Update y Full Repair).
+        const managedResult = await ModpackRepair.syncManagedPaths(distro, serverId)
+
+        // 4) Prune de sobrantes (solo Full Repair).
+        let pruneResult = { removed: [], skippedProtected: [] }
+        if(prune){
+            setLaunchDetails(Lang.queryJS('landing.repair.removingExtras'))
+            pruneResult = await ModpackRepair.pruneOrphans(distro, serverId, pruneOpts)
+        }
+
+        // 5) Registrar versión instalada → oculta el aviso "ACTUALIZACIÓN NUEVA".
+        markModpackVersionInstalled(server)
+
+        const totalRemoved = pruneResult.removed.length + managedResult.removed.length
+        toggleLaunchArea(false)
+
+        // 4) Resumen.
+        const title = prune
+            ? Lang.queryJS('landing.repair.doneRepairTitle')
+            : Lang.queryJS('landing.repair.doneUpdateTitle')
+        const summary = Lang.queryJS('landing.repair.summary')
+            .replace('%downloaded%', downloaded)
+            .replace('%removed%', totalRemoved)
+            .replace('%protected%', pruneResult.skippedProtected.length)
+        setOverlayContent(title, summary, Lang.queryJS('landing.launch.okay'))
+        setOverlayHandler(null)
+        toggleOverlay(true)
+    } catch(err){
+        logger.error('Error durante la reparación del modpack.', err)
+        toggleLaunchArea(false)
+        showLaunchFailure(
+            Lang.queryJS('landing.repair.errorTitle'),
+            (err && err.message) || Lang.queryJS('landing.dlAsync.seeConsoleForDetails')
+        )
+    } finally {
+        if(repairBtn) repairBtn.disabled = false
+        // Re-evalúa el estado de "Jugar" según selección/mantenimiento.
+        const sel = ConfigManager.getSelectedServer()
+        const underMaintenance = sel != null && ModpackStatusClient.isUnderMaintenance(sel)
+        setLaunchEnabled(sel != null && !underMaintenance)
+    }
+}
+
+/**
+ * Abre el overlay de reparación con las opciones Update / Full Repair y toggles.
+ */
+function openRepairOverlay(){
+    const serverId = ConfigManager.getSelectedServer()
+    if(!serverId || ModpackStatusClient.isUnderMaintenance(serverId)){
+        return
+    }
+
+    // Reset toggles (off por defecto = protegido).
+    ;['repairOptConfig', 'repairOptDefaultConfigs', 'repairOptResourcepacks', 'repairOptOptionsTxt']
+        .forEach(id => { const el = document.getElementById(id); if(el) el.checked = false })
+
+    const readPruneOpts = () => ({
+        config: !!document.getElementById('repairOptConfig')?.checked,
+        defaultconfigs: !!document.getElementById('repairOptDefaultConfigs')?.checked,
+        resourcepacks: !!document.getElementById('repairOptResourcepacks')?.checked,
+        optionsTxt: !!document.getElementById('repairOptOptionsTxt')?.checked
+    })
+
+    const updateBtn = document.getElementById('repairUpdateBtn')
+    const fullBtn = document.getElementById('repairFullBtn')
+    const cancelBtn = document.getElementById('repairCancelBtn')
+
+    if(updateBtn){
+        updateBtn.onclick = () => {
+            toggleOverlay(false)
+            runModpackMaintenance(serverId, { prune: false })
+        }
+    }
+    if(fullBtn){
+        fullBtn.onclick = () => {
+            const pruneOpts = readPruneOpts()
+            toggleOverlay(false)
+            runModpackMaintenance(serverId, { prune: true, pruneOpts })
+        }
+    }
+    if(cancelBtn){
+        cancelBtn.onclick = () => toggleOverlay(false)
+    }
+
+    toggleOverlay(true, true, 'repairContent')
+}
+
+;(function bindRepairButton(){
+    const btn = document.getElementById('repair_button')
+    if(btn){
+        btn.addEventListener('click', e => {
+            e.target.blur()
+            openRepairOverlay()
+        })
+    }
+    const badge = document.getElementById('update_available_badge')
+    if(badge){
+        badge.addEventListener('click', e => {
+            e.target.blur()
+            openRepairOverlay()
+        })
+    }
+})()
 
 // Expose necessary functions globally for other scripts
 // These functions are called from uibinder.js, overlay.js, and settings.js

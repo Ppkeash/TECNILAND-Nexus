@@ -7208,3 +7208,114 @@ input:checked + .toggleSwitchSlider:before {
 }
 
 /* ==================== FIN TECNILAND AUTHENTICATION SYSTEM ==================== */
+
+/* ==================== REPAIR / UPDATE MODPACK ==================== */
+#repair_button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    align-items: center;
+    gap: 4px;
+    transition: color 0.2s ease;
+    margin-top: 4px;
+}
+#repair_button:hover {
+    color: #fff;
+}
+#repair_button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.repairActionBtn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    padding: 14px 18px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+.repairActionBtn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+.repairActionBtn--danger:hover {
+    background: rgba(231, 76, 50, 0.18);
+    border-color: rgba(231, 76, 50, 0.5);
+}
+.repairActionTitle {
+    display: block;
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 3px;
+}
+.repairActionDesc {
+    display: block;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.repairAdvanced {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 14px;
+}
+.repairAdvanced > summary {
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
+    user-select: none;
+}
+.repairAdvancedHint {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    margin: 8px 0 12px;
+}
+.repairCheckRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    padding: 5px 0;
+}
+.repairCheckRow input {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+}
+#update_available_badge {
+    border: none;
+    cursor: pointer;
+    background: linear-gradient(90deg, #e8a317, #e74c32);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 999px;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+    box-shadow: 0 0 12px rgba(231, 76, 50, 0.5);
+    animation: updateBadgePulse 2s ease-in-out infinite;
+}
+#update_available_badge:hover {
+    filter: brightness(1.1);
+}
+@keyframes updateBadgePulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(231, 76, 50, 0.4); }
+    50% { box-shadow: 0 0 16px rgba(231, 76, 50, 0.7); }
+}
+/* ==================== FIN REPAIR / UPDATE MODPACK ==================== */

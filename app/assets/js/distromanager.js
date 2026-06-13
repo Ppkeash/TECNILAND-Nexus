@@ -20,4 +20,18 @@ const api = new DistributionAPI(
     false
 )
 
+/**
+ * Fuerza un cache-bust del distribution.json remoto.
+ *
+ * Las URL públicas de R2 (`*.r2.dev`) se sirven a través del edge de Cloudflare y
+ * se cachean. Tras resubir un distro nuevo, el launcher podía recibir la copia vieja
+ * del CDN → un mod eliminado seguía declarado → se redescargaba (bug intermitente).
+ * Añadir una query única en cada refresh salta ese caché de borde. `remoteUrl` es un
+ * campo público mutable de DistributionAPI, por eso se reasigna aquí.
+ */
+api.bustDistroCache = function () {
+    api.remoteUrl = exports.REMOTE_DISTRO_URL + '?t=' + Date.now()
+}
+exports.bustDistroCache = api.bustDistroCache
+
 exports.DistroAPI = api

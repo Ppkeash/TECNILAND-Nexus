@@ -162,6 +162,37 @@
         </div>
     </div>
 
+    <!-- ==================== REPAIR / UPDATE OVERLAY ==================== -->
+    <div id="repairContent" style="display: none; max-width: 620px; width: 80%; padding: 30px; background: rgba(0,0,0,0.7); border-radius: 12px; backdrop-filter: blur(6px);">
+        <span style="display: block; font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 4px;"><%- lang('overlay.repair.title') %></span>
+        <span style="display: block; font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 22px;"><%- lang('overlay.repair.subtitle') %></span>
+
+        <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
+            <button id="repairUpdateBtn" class="repairActionBtn">
+                <span class="repairActionTitle"><%- lang('overlay.repair.updateTitle') %></span>
+                <span class="repairActionDesc"><%- lang('overlay.repair.updateDesc') %></span>
+            </button>
+            <button id="repairFullBtn" class="repairActionBtn repairActionBtn--danger">
+                <span class="repairActionTitle"><%- lang('overlay.repair.fullTitle') %></span>
+                <span class="repairActionDesc"><%- lang('overlay.repair.fullDesc') %></span>
+            </button>
+        </div>
+
+        <details class="repairAdvanced">
+            <summary><%- lang('overlay.repair.advancedSummary') %></summary>
+            <p class="repairAdvancedHint"><%- lang('overlay.repair.advancedHint') %></p>
+            <label class="repairCheckRow"><input type="checkbox" id="repairOptConfig"> <%- lang('overlay.repair.optConfig') %></label>
+            <label class="repairCheckRow"><input type="checkbox" id="repairOptDefaultConfigs"> <%- lang('overlay.repair.optDefaultConfigs') %></label>
+            <label class="repairCheckRow"><input type="checkbox" id="repairOptResourcepacks"> <%- lang('overlay.repair.optResourcepacks') %></label>
+            <label class="repairCheckRow"><input type="checkbox" id="repairOptOptionsTxt"> <%- lang('overlay.repair.optOptionsTxt') %></label>
+        </details>
+
+        <div style="text-align: right; margin-top: 22px;">
+            <button id="repairCancelBtn" class="overlayKeybindEsc" style="padding: 10px 24px; border-radius: 8px; border: none; background: rgba(255,255,255,0.15); color: #fff; font-weight: 600; cursor: pointer;"><%- lang('overlay.repair.cancel') %></button>
+        </div>
+    </div>
+    <!-- ==================== FIN REPAIR / UPDATE OVERLAY ==================== -->
+
     <!-- ==================== CUSTOMIZE OVERLAY (fondo + logo) ==================== -->
     <div id="customizeContent" style="display: none; max-width: 860px; width: 80%; max-height: 80vh; overflow-y: auto; padding: 30px; background: rgba(0,0,0,0.65); border-radius: 12px; backdrop-filter: blur(6px);">
         <span style="display: block; font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 4px;"><%- lang('overlay.customizeTitle') %></span>

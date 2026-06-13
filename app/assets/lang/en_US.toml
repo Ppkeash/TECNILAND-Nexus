@@ -20,6 +20,12 @@ newsErrorFailedSpan = "Failed to Load News"
 newsErrorRetryButton = "Try Again"
 newsErrorNoneSpan = "No News"
 
+[ejs.landing.repair]
+button = "Repair"
+buttonTooltip = "Update or repair the installed modpack"
+updateBadge = "NEW UPDATE"
+updateBadgeTooltip = "A new modpack version is available. Click to update."
+
 [ejs.login]
 loginCancelText = "Cancel"
 loginSubheader = "MINECRAFT LOGIN"
@@ -55,6 +61,21 @@ customizeBackgrounds = "Background"
 customizeRandomBg = "Randomize each launch"
 customizeLogos = "Logo"
 customizeClose = "Close"
+
+[ejs.overlay.repair]
+title = "Repair modpack"
+subtitle = "Sync your modpack with the latest official version."
+updateTitle = "Update"
+updateDesc = "Downloads anything missing or changed. Removes nothing of yours."
+fullTitle = "Full repair"
+fullDesc = "Also removes leftover mods and files that are no longer part of the modpack."
+advancedSummary = "Also repair (advanced)"
+advancedHint = "Your settings are protected by default. Only check what you want the repair to be allowed to touch."
+optConfig = "config/ folder (mod settings)"
+optDefaultConfigs = "defaultconfigs/ folder"
+optResourcepacks = "resourcepacks/ folder"
+optOptionsTxt = "options.txt (game controls and options)"
+cancel = "Cancel"
 
 [ejs.settings]
 navHeaderText = "Settings"
@@ -178,6 +199,13 @@ desc = "An unknown error has occurred. Please see the console for details."
 
 [js.landing]
 noSelection = "No modpack selected"
+
+[js.landing.repair]
+removingExtras = "Removing leftover files..."
+doneUpdateTitle = "Modpack updated"
+doneRepairTitle = "Repair complete"
+summary = "Files downloaded: %downloaded%<br>Files removed: %removed%<br>Files protected: %protected%"
+errorTitle = "Failed to repair the modpack"
 
 [js.landing.launch]
 pleaseWait = "Please wait.."
