@@ -2,6 +2,35 @@
 
 Novedades de TECNILAND Nexus.
 
+## v1.2.1 — Junio 2026
+
+### 🎨 Skins y capas mejoradas
+
+- **¡Capas (capes) por fin!** Añadido soporte para capas de **MinecraftCapes** y
+  **OptiFine**, además de tu skin de TECNILAND. Si tienes una capa, ahora se ve en
+  el juego.
+- **Skins locales:** ahora puedes usar skins, capas y élitros guardados en tu PC
+  (carpeta `LocalSkin`), ideal para probar diseños sin subirlos a ningún lado.
+- **Skins más al día:** ajustada la carga de skins para que los cambios se vean
+  antes y con mejor rendimiento.
+
+### 🖼️ Nuevos fondos
+
+- **5 fondos nuevos** para personalizar tu launcher. Cámbialos desde *Ajustes →
+  Personalización*.
+- **Arreglo:** corregido un fallo por el que, al azar, el launcher podía abrir con
+  el fondo en negro/roto. Ahora siempre carga un fondo válido.
+
+### 🔧 Compatibilidad de modpack
+
+- Actualizado el cargador de skins (CustomSkinLoader) para que **coincida con la
+  versión incluida en el modpack** TECNILAND BEYOND, evitando conflictos al instalar
+  o reparar.
+
+### 🔄 Actualización
+
+La actualización es automática: abre el launcher y se aplicará sola.
+
 ## v1.2.0 — Junio 2026
 
 ### 🔧 Reparar y actualizar tus modpacks

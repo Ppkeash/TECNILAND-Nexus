@@ -164,9 +164,11 @@ const CSL_VERSIONS = {
             filename: 'CustomSkinLoader_Fabric-14.26.1.jar'
         },
         forge: {
-            version: '14.26-ForgeV2',
-            url: 'https://cdn.modrinth.com/data/idMHQ4n2/versions/4jkpqBGD/CustomSkinLoader_ForgeV2-14.26.jar',
-            filename: 'CustomSkinLoader_ForgeV2-14.26.jar'
+            // 14.28 para coincidir con el JAR distribuido en el modpack
+            // tecniland-beyond-1.20.1 (evita que el instalador borre/reemplace el jar del modpack)
+            version: '14.28-ForgeV2',
+            url: 'https://cdn.modrinth.com/data/idMHQ4n2/versions/Rcbx2QhV/CustomSkinLoader_ForgeV2-14.28.jar',
+            filename: 'CustomSkinLoader_ForgeV2-14.28.jar'
         }
     },
     '1.20': {
@@ -860,20 +862,8 @@ class CustomSkinLoaderManager {
          * CSL siempre usa: root + /textures/ + filename + .png
          */
         const config = {
-            version: '14.20',
-            enable: true,
-            enableSkull: true,
-            enableDynamicSkull: true,
-            enableTransparentSkin: true,
-            forceLoadAllTextures: false,
-            enableCape: true,
-            threadPoolSize: 4,
-            cacheExpiry: 60000,  // 1 minuto para desarrollo (permite ver cambios rápido)
-            enableUpdateSkull: true,
-            enableLocalProfileCache: false,  // Desactivado para desarrollo
-            enableCacheAutoClean: false,
-            forceIgnoreHttpsCertificate: false,
-            forceDisableCache: true,  // Desactivar cache completamente en desarrollo
+            version: '14.28',
+            buildNumber: 38,
             loadlist: [
                 {
                     name: 'TECNILAND',
@@ -886,8 +876,40 @@ class CustomSkinLoaderManager {
                     type: 'MojangAPI',
                     apiRoot: 'https://api.mojang.com/',
                     sessionRoot: 'https://sessionserver.mojang.com/'
+                },
+                {
+                    name: 'MinecraftCapes',
+                    type: 'MinecraftCapesAPI',
+                    root: 'https://api.minecraftcapes.net/profile/'
+                },
+                {
+                    name: 'OptiFine',
+                    type: 'Legacy',
+                    checkPNG: false,
+                    model: 'auto',
+                    cape: 'https://optifine.net/capes/{USERNAME}.png'
+                },
+                {
+                    name: 'LocalSkin',
+                    type: 'Legacy',
+                    checkPNG: false,
+                    skin: 'LocalSkin/skins/{USERNAME}.png',
+                    model: 'auto',
+                    cape: 'LocalSkin/capes/{USERNAME}.png',
+                    elytra: 'LocalSkin/elytras/{USERNAME}.png'
                 }
-            ]
+            ],
+            enableDynamicSkull: true,
+            enableTransparentSkin: true,
+            forceLoadAllTextures: true,
+            enableCape: true,
+            threadPoolSize: 8,
+            enableLogStdOut: false,
+            cacheExpiry: 30,
+            forceUpdateSkull: false,
+            enableLocalProfileCache: false,
+            enableCacheAutoClean: false,
+            forceDisableCache: false
         }
         
         const configPath = path.join(cslDir, 'CustomSkinLoader.json')

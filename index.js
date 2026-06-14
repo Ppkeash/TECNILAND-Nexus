@@ -431,8 +431,16 @@ function createWindow() {
         logger.error('RENDERER CRASHED, killed:', killed)
     })
 
+    // El fondo por defecto se referencia como `${bkid}.jpg`, así que bkid debe ser un
+    // id numérico de un .jpg que EXISTA. Filtrar solo archivos `N.jpg` (ignora PNGs u
+    // otros nombres) y elegir uno de esos ids; si no hubiera ninguno, caer en 0.
+    const bgFiles = fs.readdirSync(path.join(__dirname, 'app', 'assets', 'images', 'backgrounds'))
+    const bgIds = bgFiles
+        .map(f => /^(\d+)\.jpg$/i.exec(f))
+        .filter(m => m != null)
+        .map(m => parseInt(m[1], 10))
     const data = {
-        bkid: Math.floor((Math.random() * fs.readdirSync(path.join(__dirname, 'app', 'assets', 'images', 'backgrounds')).length)),
+        bkid: bgIds.length > 0 ? bgIds[Math.floor(Math.random() * bgIds.length)] : 0,
         lang: (str, placeHolders) => LangLoader.queryEJS(str, placeHolders)
     }
     Object.entries(data).forEach(([key, val]) => ejse.data(key, val))
