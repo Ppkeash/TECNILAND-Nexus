@@ -76,16 +76,10 @@ customizeClose = "Cerrar"
 [ejs.overlay.repair]
 title = "Reparar modpack"
 subtitle = "Sincroniza tu modpack con la versión oficial más reciente."
-updateTitle = "Actualizar"
-updateDesc = "Descarga lo que falte o haya cambiado. No borra nada tuyo."
 fullTitle = "Reparación completa"
-fullDesc = "Además elimina los mods y archivos sobrantes que ya no forman parte del modpack."
-advancedSummary = "Reparar también (avanzado)"
-advancedHint = "Por defecto tus ajustes están protegidos. Marca solo lo que quieras que la reparación pueda tocar."
-optConfig = "Carpeta config/ (ajustes de mods)"
-optDefaultConfigs = "Carpeta defaultconfigs/"
-optResourcepacks = "Carpeta resourcepacks/"
-optOptionsTxt = "options.txt (controles y opciones del juego)"
+fullDesc = "Descarga lo que falte o haya cambiado y elimina mods/paquetes sobrantes. Tus controles y ajustes (options.txt) se conservan."
+reinstallTitle = "Re-instalación (emergencia)"
+reinstallDesc = "Borra TODO el modpack y lo descarga de cero. Úsalo solo si algo está muy roto y la reparación no lo soluciona."
 cancel = "Cancelar"
 
 [ejs.settings]
@@ -209,10 +203,14 @@ noSelection = "Ningún modpack seleccionado"
 
 [js.landing.repair]
 removingExtras = "Eliminando archivos sobrantes..."
-doneUpdateTitle = "Modpack actualizado"
+wiping = "Borrando el modpack para reinstalar..."
 doneRepairTitle = "Reparación completada"
-summary = "Archivos descargados: %downloaded%<br>Archivos eliminados: %removed%<br>Archivos protegidos: %protected%"
+doneReinstallTitle = "Modpack reinstalado"
+summary = "Archivos descargados: %downloaded%<br>Archivos eliminados: %removed%<br>Ajustes conservados: %protected%"
 errorTitle = "Error al reparar el modpack"
+reinstallConfirmTitle = "¿Reinstalar el modpack desde cero?"
+reinstallConfirmDesc = "Se borrará TODO el modpack (mods, configuraciones, paquetes) y se descargará de nuevo. Úsalo solo si algo está muy roto. Esta acción no se puede deshacer."
+reinstallConfirmYes = "Sí, reinstalar"
 
 [js.landing.launch]
 pleaseWait = "Por favor espera..."

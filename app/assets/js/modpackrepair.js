@@ -48,6 +48,21 @@ const ALWAYS_PROTECTED_FILES = [
     'thumbs.db'
 ]
 
+/**
+ * Archivos de AJUSTES del usuario (relativos a la instancia, POSIX en minúsculas).
+ * "Seed once": se descargan la PRIMERA vez (si no existen) y a partir de ahí son
+ * INTOCABLES, aunque vengan declarados con MD5 en el distro. Es la red de seguridad
+ * del launcher: aunque el admin olvide marcarlos como `untrackedFiles` en Nebula, el
+ * jugador nunca pierde sus controles/ajustes. El admin puede ampliar esta lista por
+ * modpack con el campo `tecnilandUserFiles` del distro (rutas relativas a la instancia).
+ */
+const DEFAULT_USER_FILES = [
+    'options.txt',
+    'optionsof.txt',
+    'optionsshaders.txt',
+    'servers.dat'
+]
+
 function normalize(p) {
     return path.resolve(p).toLowerCase()
 }
@@ -185,7 +200,8 @@ async function pruneOrphans(distro, serverId, opts = {}) {
         ['mods', true],
         ['config', !!opts.config],
         ['defaultconfigs', !!opts.defaultconfigs],
-        ['resourcepacks', !!opts.resourcepacks]
+        ['resourcepacks', !!opts.resourcepacks],
+        ['shaderpacks', !!opts.shaderpacks]
     ]
 
     for (const [sub, enabled] of instanceRoots) {
@@ -283,10 +299,134 @@ async function syncManagedPaths(distro, serverId) {
     return { removed }
 }
 
+/**
+ * Resuelve las rutas absolutas de los archivos de AJUSTES del usuario para un server.
+ * Combina la lista por defecto del launcher con el campo opcional del distro
+ * `server.rawServer.tecnilandUserFiles` (rutas relativas a la instancia).
+ *
+ * @param {object} distro HeliosDistribution.
+ * @param {string} serverId
+ * @returns {string[]} rutas absolutas (sin normalizar a minúsculas; las reales).
+ */
+function getUserOwnedAbsPaths(distro, serverId) {
+    const instanceDir = ConfigManager.getInstanceDirectory()
+    const serverInstanceDir = path.join(instanceDir, serverId)
+
+    const rels = new Set(DEFAULT_USER_FILES)
+    const server = distro != null ? distro.getServerById(serverId) : null
+    const extra = server != null ? server.rawServer.tecnilandUserFiles : null
+    if (Array.isArray(extra)) {
+        for (const e of extra) {
+            const rel = String(e).replace(/\\/g, '/').replace(/^\/+/, '')
+            if (rel) {
+                rels.add(rel)
+            }
+        }
+    }
+
+    const out = []
+    for (const rel of rels) {
+        const abs = path.resolve(serverInstanceDir, rel)
+        // Anti-traversal: la ruta debe quedar dentro de la instancia del server.
+        if (abs.toLowerCase().startsWith((serverInstanceDir + path.sep).toLowerCase())) {
+            out.push(abs)
+        } else {
+            log.warn(`tecnilandUserFiles fuera de la instancia, ignorado: ${rel}`)
+        }
+    }
+    return out
+}
+
+/**
+ * Toma una "foto" (contenido en memoria) de los archivos de ajustes del usuario que
+ * EXISTEN antes de reparar/lanzar. Solo se capturan los que ya existen: si un archivo
+ * no existe, se deja que helios lo siembre con el valor del distro (primera vez).
+ *
+ * @param {object} distro HeliosDistribution.
+ * @param {string} serverId
+ * @returns {Promise<Array<{path:string, data:Buffer}>>}
+ */
+async function snapshotUserFiles(distro, serverId) {
+    const snapshot = []
+    for (const abs of getUserOwnedAbsPaths(distro, serverId)) {
+        try {
+            if (await fs.pathExists(abs)) {
+                snapshot.push({ path: abs, data: await fs.readFile(abs) })
+            }
+        } catch (err) {
+            log.warn(`No se pudo respaldar el archivo de usuario ${abs}: ${err.message}`)
+        }
+    }
+    if (snapshot.length > 0) {
+        log.info(`Archivos de usuario respaldados (intocables): ${snapshot.length}.`)
+    }
+    return snapshot
+}
+
+/**
+ * Restaura la "foto" de archivos de usuario, deshaciendo cualquier sobrescritura que
+ * FullRepair haya hecho sobre ellos. Garantiza que options.txt y ajustes del jugador
+ * queden EXACTAMENTE como estaban antes de reparar/lanzar.
+ *
+ * @param {Array<{path:string, data:Buffer}>} snapshot resultado de snapshotUserFiles.
+ * @returns {Promise<{restored:string[]}>}
+ */
+async function restoreUserFiles(snapshot) {
+    const restored = []
+    if (!Array.isArray(snapshot)) {
+        return { restored }
+    }
+    for (const entry of snapshot) {
+        try {
+            const current = await fs.pathExists(entry.path) ? await fs.readFile(entry.path) : null
+            // Solo reescribe si cambió (FullRepair lo pisó) → evita I/O innecesaria.
+            if (current == null || !current.equals(entry.data)) {
+                await fs.outputFile(entry.path, entry.data)
+                restored.push(entry.path)
+                log.info(`user file preserved (restaurado): ${path.basename(entry.path)}`)
+            }
+        } catch (err) {
+            log.warn(`No se pudo restaurar el archivo de usuario ${entry.path}: ${err.message}`)
+        }
+    }
+    return { restored }
+}
+
+/**
+ * Borra POR COMPLETO la instancia de un server (mods, config, resourcepacks, etc.)
+ * para una RE-INSTALACIÓN de emergencia. Tras esto, FullRepair vuelve a descargar
+ * todo desde cero. Pensado para modpacks de SERVIDOR (sin mundos locales): es un
+ * borrado total de la carpeta de instancia del server.
+ *
+ * @param {string} serverId
+ * @returns {Promise<{wiped:boolean, path:string}>}
+ */
+async function wipeInstance(serverId) {
+    const instanceDir = ConfigManager.getInstanceDirectory()
+    const serverInstanceDir = path.join(instanceDir, serverId)
+
+    // Guarda dura: nunca borrar la raíz de instancias entera ni algo fuera de ella.
+    const safeChild = serverInstanceDir.toLowerCase().startsWith((instanceDir + path.sep).toLowerCase())
+    if (!serverId || !safeChild) {
+        log.error(`wipeInstance abortado: ruta insegura para serverId="${serverId}".`)
+        return { wiped: false, path: serverInstanceDir }
+    }
+
+    if (await fs.pathExists(serverInstanceDir)) {
+        await fs.remove(serverInstanceDir)
+        log.info(`Instancia eliminada por re-instalación: ${serverInstanceDir}`)
+    }
+    return { wiped: true, path: serverInstanceDir }
+}
+
 module.exports = {
     buildExpectedPaths,
     walkFiles,
     isProtected,
     pruneOrphans,
-    syncManagedPaths
+    syncManagedPaths,
+    getUserOwnedAbsPaths,
+    snapshotUserFiles,
+    restoreUserFiles,
+    wipeInstance
 }

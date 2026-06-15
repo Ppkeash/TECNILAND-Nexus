@@ -1231,6 +1231,16 @@ async function dlAsync(login = true) {
             }
         })
 
+        // Red de seguridad: respaldar los archivos de AJUSTES del usuario (options.txt,
+        // etc.) ANTES de validar/descargar. FullRepair re-descarga cualquier File con MD5
+        // distinto; si el jugador editó options.txt, lo pisaría. Lo restauramos después.
+        let userFilesSnapshot = []
+        try {
+            userFilesSnapshot = await ModpackRepair.snapshotUserFiles(distro, serverId)
+        } catch (err) {
+            loggerLaunchSuite.warn('No se pudieron respaldar los archivos de usuario.', err)
+        }
+
         loggerLaunchSuite.info('Validating files.')
         setLaunchDetails(Lang.queryJS('landing.dlAsync.validatingFileIntegrity'))
         let invalidFileCount = 0
@@ -1267,6 +1277,23 @@ async function dlAsync(login = true) {
         remote.getCurrentWindow().setProgressBar(-1)
 
         fullRepairModule.destroyReceiver()
+
+        // Restaurar los archivos de ajustes del usuario por si FullRepair los pisó.
+        // Garantiza que options.txt y configuraciones del jugador queden INTOCABLES.
+        try {
+            await ModpackRepair.restoreUserFiles(userFilesSnapshot)
+        } catch (err) {
+            loggerLaunchSuite.warn('No se pudieron restaurar los archivos de usuario.', err)
+        }
+
+        // Auto-limpieza de mods sobrantes: si el admin cambió/quitó un mod en el distro,
+        // el nuevo ya se descargó arriba; aquí se elimina el viejo (huérfano) en mods/ y
+        // modstore. Solo mods (config NO: muchos mods generan archivos en runtime).
+        try {
+            await ModpackRepair.pruneOrphans(distro, serverId, {})
+        } catch (err) {
+            loggerLaunchSuite.warn('No se pudo limpiar mods sobrantes.', err)
+        }
 
         // Sincronizar rutas gestionadas por el admin (borra sobrantes declarados como
         // 100% gestionados, ej. config/fancymenu) y registrar la versión instalada.
@@ -2209,18 +2236,23 @@ async function verifyAndDownloadDistroFiles(serverId, logger){
 }
 
 /**
- * Ejecuta Update o Full Repair sobre el modpack seleccionado.
- * - Update: descarga faltantes/cambiados. NO borra nada.
- * - Full Repair: además elimina sobrantes en rutas gestionadas (con toggles).
+ * Ejecuta una de las dos acciones de mantenimiento sobre el modpack seleccionado.
+ *
+ * - 'repair' (Reparación completa): respalda los ajustes del usuario, valida y descarga
+ *   faltantes/cambiados, restaura los ajustes del usuario, y elimina sobrantes en rutas
+ *   de ADMIN (mods, resourcepacks, shaderpacks + rutas gestionadas). NO toca options.txt
+ *   ni config del usuario. Arregla bugs/desincronización sin perder ajustes.
+ * - 'reinstall' (Re-instalación): BORRA por completo la instancia y vuelve a descargar
+ *   todo desde cero. Emergencia. Destructivo.
  *
  * @param {string} serverId
  * @param {object} options
- * @param {boolean} options.prune true para Full Repair.
- * @param {object} [options.pruneOpts] toggles de carpetas sensibles.
+ * @param {('repair'|'reinstall')} options.mode
  */
-async function runModpackMaintenance(serverId, { prune, pruneOpts = {} } = {}){
+async function runModpackMaintenance(serverId, { mode = 'repair' } = {}){
     const logger = LoggerUtil.getLogger('ModpackMaintenance')
     const repairBtn = document.getElementById('repair_button')
+    const isReinstall = mode === 'reinstall'
 
     setLaunchEnabled(false)
     if(repairBtn) repairBtn.disabled = true
@@ -2237,38 +2269,61 @@ async function runModpackMaintenance(serverId, { prune, pruneOpts = {} } = {}){
             throw new Error(`Server ${serverId} no existe en el distro.`)
         }
 
-        // 2) Descargar faltantes/cambiados (Update y Full Repair).
-        const downloaded = await verifyAndDownloadDistroFiles(serverId, logger)
-
-        // 3) Sincronizar rutas gestionadas por el admin (Update y Full Repair).
-        const managedResult = await ModpackRepair.syncManagedPaths(distro, serverId)
-
-        // 4) Prune de sobrantes (solo Full Repair).
-        let pruneResult = { removed: [], skippedProtected: [] }
-        if(prune){
-            setLaunchDetails(Lang.queryJS('landing.repair.removingExtras'))
-            pruneResult = await ModpackRepair.pruneOrphans(distro, serverId, pruneOpts)
+        // 2) Re-instalación: borrado total de la instancia antes de re-descargar.
+        if(isReinstall){
+            setLaunchDetails(Lang.queryJS('landing.repair.wiping'))
+            await ModpackRepair.wipeInstance(serverId)
         }
 
-        // 5) Registrar versión instalada → oculta el aviso "ACTUALIZACIÓN NUEVA".
+        // 3) Reparación: respaldar ajustes del usuario (intocables). En re-instalación NO
+        //    se respaldan (borrado total intencional → todo vuelve al valor del distro).
+        let userSnapshot = []
+        if(!isReinstall){
+            userSnapshot = await ModpackRepair.snapshotUserFiles(distro, serverId)
+        }
+
+        // 4) Validar + descargar faltantes/cambiados (ambas acciones).
+        const downloaded = await verifyAndDownloadDistroFiles(serverId, logger)
+
+        // 5) Restaurar ajustes del usuario por si se pisaron (solo reparación).
+        let restoredCount = 0
+        if(!isReinstall){
+            const r = await ModpackRepair.restoreUserFiles(userSnapshot)
+            restoredCount = r.restored.length
+        }
+
+        // 6) Limpiar sobrantes. Reparación: mods + resourcepacks + shaderpacks (admin) y
+        //    rutas gestionadas. config NO (mods generan archivos en runtime). En
+        //    re-instalación no hace falta (la instancia ya se borró entera).
+        let pruneResult = { removed: [], skippedProtected: [] }
+        const managedResult = await ModpackRepair.syncManagedPaths(distro, serverId)
+        if(!isReinstall){
+            setLaunchDetails(Lang.queryJS('landing.repair.removingExtras'))
+            pruneResult = await ModpackRepair.pruneOrphans(distro, serverId, {
+                resourcepacks: true,
+                shaderpacks: true
+            })
+        }
+
+        // 7) Registrar versión instalada → oculta el aviso "ACTUALIZACIÓN NUEVA".
         markModpackVersionInstalled(server)
 
         const totalRemoved = pruneResult.removed.length + managedResult.removed.length
         toggleLaunchArea(false)
 
-        // 4) Resumen.
-        const title = prune
-            ? Lang.queryJS('landing.repair.doneRepairTitle')
-            : Lang.queryJS('landing.repair.doneUpdateTitle')
+        // 8) Resumen.
+        const title = isReinstall
+            ? Lang.queryJS('landing.repair.doneReinstallTitle')
+            : Lang.queryJS('landing.repair.doneRepairTitle')
         const summary = Lang.queryJS('landing.repair.summary')
             .replace('%downloaded%', downloaded)
             .replace('%removed%', totalRemoved)
-            .replace('%protected%', pruneResult.skippedProtected.length)
+            .replace('%protected%', restoredCount)
         setOverlayContent(title, summary, Lang.queryJS('landing.launch.okay'))
         setOverlayHandler(null)
         toggleOverlay(true)
     } catch(err){
-        logger.error('Error durante la reparación del modpack.', err)
+        logger.error('Error durante el mantenimiento del modpack.', err)
         toggleLaunchArea(false)
         showLaunchFailure(
             Lang.queryJS('landing.repair.errorTitle'),
@@ -2284,7 +2339,8 @@ async function runModpackMaintenance(serverId, { prune, pruneOpts = {} } = {}){
 }
 
 /**
- * Abre el overlay de reparación con las opciones Update / Full Repair y toggles.
+ * Abre el overlay de reparación con las dos acciones: Reparación completa y
+ * Re-instalación (esta última con confirmación, por destructiva).
  */
 function openRepairOverlay(){
     const serverId = ConfigManager.getSelectedServer()
@@ -2292,32 +2348,33 @@ function openRepairOverlay(){
         return
     }
 
-    // Reset toggles (off por defecto = protegido).
-    ;['repairOptConfig', 'repairOptDefaultConfigs', 'repairOptResourcepacks', 'repairOptOptionsTxt']
-        .forEach(id => { const el = document.getElementById(id); if(el) el.checked = false })
-
-    const readPruneOpts = () => ({
-        config: !!document.getElementById('repairOptConfig')?.checked,
-        defaultconfigs: !!document.getElementById('repairOptDefaultConfigs')?.checked,
-        resourcepacks: !!document.getElementById('repairOptResourcepacks')?.checked,
-        optionsTxt: !!document.getElementById('repairOptOptionsTxt')?.checked
-    })
-
-    const updateBtn = document.getElementById('repairUpdateBtn')
     const fullBtn = document.getElementById('repairFullBtn')
+    const reinstallBtn = document.getElementById('repairReinstallBtn')
     const cancelBtn = document.getElementById('repairCancelBtn')
 
-    if(updateBtn){
-        updateBtn.onclick = () => {
-            toggleOverlay(false)
-            runModpackMaintenance(serverId, { prune: false })
-        }
-    }
     if(fullBtn){
         fullBtn.onclick = () => {
-            const pruneOpts = readPruneOpts()
             toggleOverlay(false)
-            runModpackMaintenance(serverId, { prune: true, pruneOpts })
+            runModpackMaintenance(serverId, { mode: 'repair' })
+        }
+    }
+    if(reinstallBtn){
+        reinstallBtn.onclick = () => {
+            // Confirmación: la re-instalación borra TODO el modpack.
+            setOverlayContent(
+                Lang.queryJS('landing.repair.reinstallConfirmTitle'),
+                Lang.queryJS('landing.repair.reinstallConfirmDesc'),
+                Lang.queryJS('landing.repair.reinstallConfirmYes'),
+                Lang.queryJS('landing.repair.cancel')
+            )
+            setOverlayHandler(() => {
+                toggleOverlay(false)
+                runModpackMaintenance(serverId, { mode: 'reinstall' })
+            })
+            setDismissHandler(() => {
+                toggleOverlay(false)
+            })
+            toggleOverlay(true, true)
         }
     }
     if(cancelBtn){

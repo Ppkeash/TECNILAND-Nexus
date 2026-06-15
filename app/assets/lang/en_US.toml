@@ -65,16 +65,10 @@ customizeClose = "Close"
 [ejs.overlay.repair]
 title = "Repair modpack"
 subtitle = "Sync your modpack with the latest official version."
-updateTitle = "Update"
-updateDesc = "Downloads anything missing or changed. Removes nothing of yours."
 fullTitle = "Full repair"
-fullDesc = "Also removes leftover mods and files that are no longer part of the modpack."
-advancedSummary = "Also repair (advanced)"
-advancedHint = "Your settings are protected by default. Only check what you want the repair to be allowed to touch."
-optConfig = "config/ folder (mod settings)"
-optDefaultConfigs = "defaultconfigs/ folder"
-optResourcepacks = "resourcepacks/ folder"
-optOptionsTxt = "options.txt (game controls and options)"
+fullDesc = "Downloads anything missing or changed and removes leftover mods/packs. Your controls and settings (options.txt) are kept."
+reinstallTitle = "Reinstall (emergency)"
+reinstallDesc = "Deletes the ENTIRE modpack and downloads it from scratch. Use only if something is badly broken and a repair doesn't fix it."
 cancel = "Cancel"
 
 [ejs.settings]
@@ -202,10 +196,14 @@ noSelection = "No modpack selected"
 
 [js.landing.repair]
 removingExtras = "Removing leftover files..."
-doneUpdateTitle = "Modpack updated"
+wiping = "Wiping the modpack to reinstall..."
 doneRepairTitle = "Repair complete"
-summary = "Files downloaded: %downloaded%<br>Files removed: %removed%<br>Files protected: %protected%"
+doneReinstallTitle = "Modpack reinstalled"
+summary = "Files downloaded: %downloaded%<br>Files removed: %removed%<br>Settings kept: %protected%"
 errorTitle = "Failed to repair the modpack"
+reinstallConfirmTitle = "Reinstall the modpack from scratch?"
+reinstallConfirmDesc = "This will delete the ENTIRE modpack (mods, configs, packs) and download it again. Use it only if something is badly broken. This cannot be undone."
+reinstallConfirmYes = "Yes, reinstall"
 
 [js.landing.launch]
 pleaseWait = "Please wait.."

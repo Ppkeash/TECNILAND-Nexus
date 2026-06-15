@@ -88,13 +88,53 @@ lee el launcher.
 
 ## 5. Actualizar el contenido de un modpack (mods / configs)
 
-El launcher usa `distribution.json` (Nebula → R2) como **fuente de verdad**. Dos
-mecanismos cubren añadir, cambiar y **borrar** archivos sin romper los ajustes del
-jugador.
+El launcher usa `distribution.json` (Nebula → R2) como **fuente de verdad**. Al darle
+**Jugar**, el launcher valida y descarga lo que falta o cambió, y **elimina mods
+sobrantes** automáticamente. Los **ajustes del jugador** (`options.txt`, controles,
+FPS) quedan protegidos.
 
-### 5.1. Campos que controlas en `distribution.json`
+### 5.0. ⚠️ IMPORTANTE — Archivos del jugador (`untrackedFiles`)
 
-Por cada server (modpack):
+**El bug de "se me resetea options.txt"** ocurría porque Nebula empaquetaba
+`options.txt` con MD5. Cada vez que el jugador lo editaba, el launcher veía un MD5
+distinto y lo **re-descargaba encima** (reset).
+
+**Regla:** los archivos que el jugador edita (controles, video, etc.) deben ir como
+**`untrackedFiles`** en `servermeta.json`. Nebula los empaqueta **sin MD5** → el
+launcher los siembra **la primera vez** y **nunca los vuelve a tocar**.
+
+`servers/<id>/servermeta.json`:
+
+```jsonc
+"untrackedFiles": [
+  {
+    "appliesTo": ["files"],
+    "patterns": [
+      "options.txt",
+      "optionsof.txt",
+      "optionsshaders.txt",
+      "servers.dat",
+      "config/embeddium-options.json",   // FPS / video
+      "config/embeddium-fingerprint.json",
+      "config/ribbits-options.json",
+      "config/visual_keybinder.toml"
+    ]
+  }
+]
+```
+
+> No untrackees `config/defaultoptions/`: ese es el mod **DefaultOptions** (tus
+> ajustes por defecto para jugadores nuevos). Eso sí lo controlas tú.
+
+**Doble red de seguridad:** además, el launcher protege SIEMPRE `options.txt`,
+`optionsof.txt`, `optionsshaders.txt` y `servers.dat` (los respalda antes de reparar
+y los restaura después), aunque olvides ponerlos en `untrackedFiles`. Para proteger
+otros archivos vía launcher, añade el campo extra `tecnilandUserFiles` al server en
+el distro (rutas relativas a la instancia).
+
+### 5.1. Campos extra que controlas en `distribution.json`
+
+Por cada server (Nebula los ignora; el launcher los lee):
 
 ```json
 "servers": [
@@ -102,49 +142,42 @@ Por cada server (modpack):
     "id": "tecniland-beyond",
     "version": "1.0.1",                          // súbelo en CADA cambio
     "tecnilandManaged": ["config/fancymenu"],    // carpetas 100% gestionadas
-    "modules": [
-      { "id": "...", "type": "File",
-        "artifact": { "path": "config/fancymenu/layout.json", "MD5": "...", "url": "..." } }
-    ]
+    "tecnilandUserFiles": ["config/loquesea.json"] // archivos del jugador (seed once)
   }
 ]
 ```
 
-- **`version`**: cualquier cambio (mod, config, lo que sea) → súbelo (`1.0.1` → `1.0.2`).
-  No importa el esquema; el launcher solo compara si es **distinto**. Distinto =
-  todos ven el aviso **"ACTUALIZACIÓN NUEVA"**. `tecnilandManaged` es un campo extra;
-  helios lo ignora, es seguro.
-- **`tecnilandManaged`**: lista de subcarpetas (relativas a la instancia) que son
-  100 % tuyas. Se sincronizan **exactas** en cada arranque y en cada reparación:
-  lo que no esté declarado en el distro se **borra** del cliente. El resto de
-  `config/` del usuario nunca se toca.
+- **`version`**: cualquier cambio → súbelo (`1.0.1` → `1.0.2`). El launcher solo
+  compara si es **distinto** → todos ven el aviso **"ACTUALIZACIÓN NUEVA"**.
+- **`tecnilandManaged`**: subcarpetas 100 % tuyas. Se sincronizan **exactas** en cada
+  arranque/reparación: lo no declarado se **borra**. Úsalo para empujar/quitar
+  archivos de config concretos (ej. FancyMenu) sin tocar el resto.
+- **`tecnilandUserFiles`**: archivos del jugador a proteger por el launcher (seed once).
 
-### 5.2. Añadir / cambiar un archivo (ej. FancyMenu)
+### 5.2. Añadir / cambiar un mod o archivo
 
-1. Declararlo como módulo `type: "File"` con su `artifact.path` (ej.
-   `config/fancymenu/loquesea.json`), su `MD5` y su `url` (R2).
-2. Regenerar `distribution.json` (Nebula) y subirlo a R2.
-3. Subir `version`.
-   → Los jugadores lo reciben automáticamente al jugar/actualizar (descarga lo
-   faltante o cambiado).
+1. Mete/cambia el archivo en `servers/<id>/files/...` (o `forgemods/`).
+2. Regenera `distribution.json` (Nebula) y súbelo a R2.
+3. Sube `version`.
+   → Los jugadores lo reciben **al darle Jugar** (descarga lo faltante o cambiado).
 
-### 5.3. Borrar un archivo
+### 5.3. Borrar / cambiar un mod (tu caso de hoy)
 
-- Si está bajo una ruta de `tecnilandManaged` (ej. `config/fancymenu`): basta con
-  **quitarlo del distro** y subir `version`. Se borra solo en el cliente al jugar.
-- Si NO está en una ruta gestionada (ej. un mod suelto en `mods/`): el jugador lo
-  elimina con **Reparar → Reparación completa** (botón 🔧 junto a Jugar). Eso quita
-  todos los mods sobrantes que ya no están en el distro.
+- **Mods (`mods/`):** quítalo/cámbialo en Nebula, regenera, sube `version`. Al darle
+  **Jugar**, el launcher descarga el nuevo y **borra el viejo automáticamente** (ya no
+  hace falta tocar nada). El mod fantasma quedó resuelto.
+- **Config bajo `tecnilandManaged`** (ej. `config/fancymenu`): quítalo del distro +
+  sube `version`. Se borra solo en el cliente al jugar.
 
-### 5.4. Botón Reparar (en el launcher)
+### 5.4. Botón Reparar 🔧 (en el launcher, junto a Jugar)
 
-Junto a **Jugar**, con un modpack de distribución seleccionado:
+Dos acciones, **sin checkboxes**:
 
-- **Actualizar**: descarga faltantes/cambiados + sincroniza rutas gestionadas.
-  **No** borra mods/configs del usuario.
-- **Reparación completa**: lo anterior + **elimina sobrantes** en `mods/` (y en
-  `config/`, `defaultconfigs/`, `resourcepacks/`, `options.txt` solo si marcas el
-  checkbox correspondiente). `saves/`, `screenshots/`, `logs/` nunca se tocan.
+- **Reparación completa**: revalida y descarga faltantes/cambiados, elimina sobrantes
+  en `mods/`, `resourcepacks/`, `shaderpacks/` y rutas gestionadas. **Conserva**
+  `options.txt` y los ajustes del jugador. Para bugs/desincronización.
+- **Re-instalación (emergencia)**: **borra TODO** el modpack y lo descarga de cero.
+  Pide confirmación. Solo cuando algo está muy roto.
 
 > Nota técnica: cada refresh del distro hace **cache-bust** (`?t=`) para saltar el
 > caché de borde de R2/Cloudflare. Por eso un cambio recién subido se ve al toque y

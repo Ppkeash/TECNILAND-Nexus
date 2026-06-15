@@ -167,25 +167,16 @@
         <span style="display: block; font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 4px;"><%- lang('overlay.repair.title') %></span>
         <span style="display: block; font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 22px;"><%- lang('overlay.repair.subtitle') %></span>
 
-        <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
-            <button id="repairUpdateBtn" class="repairActionBtn">
-                <span class="repairActionTitle"><%- lang('overlay.repair.updateTitle') %></span>
-                <span class="repairActionDesc"><%- lang('overlay.repair.updateDesc') %></span>
-            </button>
-            <button id="repairFullBtn" class="repairActionBtn repairActionBtn--danger">
+        <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px;">
+            <button id="repairFullBtn" class="repairActionBtn">
                 <span class="repairActionTitle"><%- lang('overlay.repair.fullTitle') %></span>
                 <span class="repairActionDesc"><%- lang('overlay.repair.fullDesc') %></span>
             </button>
+            <button id="repairReinstallBtn" class="repairActionBtn repairActionBtn--danger">
+                <span class="repairActionTitle"><%- lang('overlay.repair.reinstallTitle') %></span>
+                <span class="repairActionDesc"><%- lang('overlay.repair.reinstallDesc') %></span>
+            </button>
         </div>
-
-        <details class="repairAdvanced">
-            <summary><%- lang('overlay.repair.advancedSummary') %></summary>
-            <p class="repairAdvancedHint"><%- lang('overlay.repair.advancedHint') %></p>
-            <label class="repairCheckRow"><input type="checkbox" id="repairOptConfig"> <%- lang('overlay.repair.optConfig') %></label>
-            <label class="repairCheckRow"><input type="checkbox" id="repairOptDefaultConfigs"> <%- lang('overlay.repair.optDefaultConfigs') %></label>
-            <label class="repairCheckRow"><input type="checkbox" id="repairOptResourcepacks"> <%- lang('overlay.repair.optResourcepacks') %></label>
-            <label class="repairCheckRow"><input type="checkbox" id="repairOptOptionsTxt"> <%- lang('overlay.repair.optOptionsTxt') %></label>
-        </details>
 
         <div style="text-align: right; margin-top: 22px;">
             <button id="repairCancelBtn" class="overlayKeybindEsc" style="padding: 10px 24px; border-radius: 8px; border: none; background: rgba(255,255,255,0.15); color: #fff; font-weight: 600; cursor: pointer;"><%- lang('overlay.repair.cancel') %></button>

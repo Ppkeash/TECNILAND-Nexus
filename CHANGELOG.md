@@ -2,6 +2,34 @@
 
 Novedades de TECNILAND Nexus.
 
+## v1.2.2 — Junio 2026
+
+### 🛡️ Tus ajustes ya no se pierden (arreglo importante)
+
+- **Adiós al reseteo de `options.txt`:** corregido el fallo grave por el que tus
+  controles, FOV, sonido y ajustes de video (FPS) se **restablecían** cada vez que
+  reiniciabas el modpack. Ahora tus ajustes son **intocables**: solo se ponen los del
+  servidor la **primera vez**, y a partir de ahí mandas tú.
+- Doble protección: el launcher respalda y restaura tus ajustes en cada arranque por
+  si acaso. Tus partidas y capturas nunca estuvieron en riesgo.
+
+### 🔄 Cambios de mods automáticos
+
+- **Cambiar un mod ahora es instantáneo para todos:** cuando actualizamos o quitamos
+  un mod, te lo aplicamos **al darle Jugar**, sin que tengas que hacer nada. El mod
+  viejo se retira solo y entra el nuevo.
+
+### 🔧 Botón Reparar más simple
+
+- Rediseñado a **dos acciones claras** (sin casillas confusas):
+  - **Reparación completa:** arregla fallos y sincroniza el modpack **conservando tus
+    ajustes**.
+  - **Re-instalación (emergencia):** reinstala el modpack desde cero. Pide confirmación.
+
+### 🔄 Actualización
+
+La actualización es automática: abre el launcher y se aplicará sola.
+
 ## v1.2.1 — Junio 2026
 
 ### 🎨 Skins y capas mejoradas
