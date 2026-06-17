@@ -2,6 +2,19 @@
 
 Novedades de TECNILAND Nexus.
 
+## v1.2.4 — Junio 2026
+
+### 🛠️ Arreglo de crasheo en el servidor (el bueno)
+
+- **Solución definitiva al crasheo *"Cannot reserve … direct buffer memory"***. El
+  intento anterior (v1.2.3) ponía un tope a la memoria de red, pero el problema real
+  es una **fuga**: la parte de red iba pidiendo memoria y no la soltaba, así que el
+  tope solo hacía que el crasheo llegara **antes**.
+- **El arreglo de verdad:** ahora el launcher le dice al juego que use **memoria normal
+  (heap)** para la red en vez de memoria directa. Esa memoria sí la limpia Java solo,
+  así que la fuga ya no puede llenar nada ni tumbar el juego.
+- **Tu RAM la sigues ajustando igual.** No tienes que tocar nada.
+
 ## v1.2.3 — Junio 2026
 
 ### 🛠️ Arreglo de crasheo en partidas largas

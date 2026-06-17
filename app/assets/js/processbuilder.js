@@ -901,31 +901,42 @@ class ProcessBuilder {
     }
 
     /**
-     * Cap off-heap (direct) memory used by Netty.
+     * Mitigate the Netty direct-buffer memory leak in modded Minecraft.
      *
-     * By default the JVM sets MaxDirectMemorySize == -Xmx. With a large heap
-     * (e.g. 8.5G) Netty's pooled allocator sizes its arenas relative to that
-     * huge ceiling and never releases them under sustained multiplayer packet
-     * load, leading to:
-     *   "OutOfMemoryError: Cannot reserve N bytes of direct buffer memory"
-     * after ~20 min in-server. Heap stays healthy so it looks like a leak.
+     * Symptom: "OutOfMemoryError: Cannot reserve N bytes of direct buffer
+     * memory" while playing multiplayer, even with plenty of heap free. The
+     * networking layer (Netty) steadily allocates OFF-heap (direct) buffers
+     * and a mod fails to release them, so they accumulate until the direct
+     * ceiling is hit and the client crashes (~minutes, scaling with the cap).
      *
-     * Capping direct memory forces buffer reuse and bounds off-heap growth.
-     * We only inject the cap if the user (or modManifest) hasn't set one, so
-     * advanced users keep full control.
+     * Simply capping -XX:MaxDirectMemorySize does NOT fix a real leak — it
+     * just makes the crash arrive sooner. The robust fix is to make Netty
+     * prefer HEAP buffers (-Dio.netty.noPreferDirect=true): those are normal
+     * Java objects reclaimed by the GC, so the leak can no longer exhaust
+     * off-heap memory. -Dio.netty.maxDirectMemory=0 hands direct-buffer
+     * accounting back to the JDK, which frees them eagerly via the cleaner.
+     *
+     * Each property is only injected if the user/manifest hasn't set it, so
+     * advanced users keep full control. -Xmx is never touched.
      *
      * @param {Array<string>} args Final JVM args array
-     * @returns {Array<string>} args with a direct-memory cap if none present
+     * @returns {Array<string>} args with Netty off-heap mitigations applied
      */
     _applyDirectMemoryCap(args) {
-        const hasCap = args.some(a => typeof a === 'string' && a.startsWith('-XX:MaxDirectMemorySize'))
-        if (hasCap) {
-            logger.info('MaxDirectMemorySize already set by user/manifest; leaving as-is.')
-            return args
+        const hasProp = (prefix) => args.some(a => typeof a === 'string' && a.startsWith(prefix))
+
+        // Force heap buffers so leaked network buffers get garbage-collected.
+        if (!hasProp('-Dio.netty.noPreferDirect')) {
+            args.push('-Dio.netty.noPreferDirect=true')
+            logger.info('Injected -Dio.netty.noPreferDirect=true (heap buffers; fixes direct-buffer OOM leak).')
         }
-        const cap = '-XX:MaxDirectMemorySize=2G'
-        args.push(cap)
-        logger.info(`Injected ${cap} to bound Netty off-heap memory (prevents direct-buffer OOM).`)
+
+        // Let the JDK manage/free direct buffers via its cleaner.
+        if (!hasProp('-Dio.netty.maxDirectMemory')) {
+            args.push('-Dio.netty.maxDirectMemory=0')
+            logger.info('Injected -Dio.netty.maxDirectMemory=0 (JDK-managed direct buffers, eager free).')
+        }
+
         return args
     }
 
