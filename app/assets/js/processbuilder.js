@@ -15,6 +15,24 @@ const CustomSkinLoaderManager  = require('./customskinloader/CustomSkinLoaderMan
 
 const logger = LoggerUtil.getLogger('ProcessBuilder')
 
+// ============================================================================
+// DIAGNOSTIC BUILD FLAG — set to false (and rebuild) for public releases.
+// When true, launches inject JVM flags to capture the cause of the in-server
+// OutOfMemoryError (heap dump on OOM + Netty paranoid leak detection), writing
+// artifacts to <instance>/crash-dumps. This has a runtime cost (paranoid leak
+// detection slows networking) and must NOT ship to players.
+// ============================================================================
+const NETWORK_DIAGNOSTICS = false
+
+// Force Netty network buffers onto the JVM heap (-Dio.netty.noPreferDirect).
+// This was needed to survive an OFF-heap leak from the_obsessed (broadcasting
+// mob NBT every tick). With that mod removed the leak is gone, and forcing
+// buffers onto the heap only adds GC pressure on a heavy pack — which can cause
+// stop-the-world stalls long enough to trip the server keep-alive timeout
+// (client frozen, kicked). Default OFF (use the JVM's normal off-heap buffers).
+// Flip true only if an off-heap (direct buffer) OOM returns.
+const FORCE_HEAP_NET_BUFFERS = false
+
 
 /**
  * Only forge and fabric are top level mod loaders.
@@ -926,17 +944,78 @@ class ProcessBuilder {
         const hasProp = (prefix) => args.some(a => typeof a === 'string' && a.startsWith(prefix))
 
         // Force heap buffers so leaked network buffers get garbage-collected.
-        if (!hasProp('-Dio.netty.noPreferDirect')) {
+        // Off by default — see FORCE_HEAP_NET_BUFFERS note (causes GC pressure).
+        if (FORCE_HEAP_NET_BUFFERS && !hasProp('-Dio.netty.noPreferDirect')) {
             args.push('-Dio.netty.noPreferDirect=true')
-            logger.info('Injected -Dio.netty.noPreferDirect=true (heap buffers; fixes direct-buffer OOM leak).')
+            logger.info('Injected -Dio.netty.noPreferDirect=true (heap buffers; for off-heap leak survival).')
         }
 
-        // Let the JDK manage/free direct buffers via its cleaner.
+        // Let the JDK manage/free direct buffers via its cleaner. Harmless and
+        // helps direct buffers get freed promptly without GC pressure.
         if (!hasProp('-Dio.netty.maxDirectMemory')) {
             args.push('-Dio.netty.maxDirectMemory=0')
             logger.info('Injected -Dio.netty.maxDirectMemory=0 (JDK-managed direct buffers, eager free).')
         }
 
+        return args
+    }
+
+    /**
+     * Inject diagnostic JVM flags to capture the cause of the in-server OOM.
+     * Gated by NETWORK_DIAGNOSTICS — must be false for public releases.
+     *
+     * - -XX:+HeapDumpOnOutOfMemoryError + -XX:HeapDumpPath: on the next
+     *   "Java heap space" OOM, dumps the heap to <instance>/crash-dumps so we
+     *   can see which mod/class is filling memory.
+     * - -Dio.netty.leakDetection.level=simple: low-overhead ByteBuf leak
+     *   sampling (paranoid's per-buffer stack capture can itself stall threads).
+     * - -Xlog:gc*,safepoint: GC + safepoint pause log to <instance>/crash-dumps,
+     *   to catch a long stop-the-world stall that trips a server keep-alive
+     *   timeout (client frozen, not crashed).
+     *
+     * Each flag is skipped if the user/manifest already set it.
+     *
+     * @param {Array<string>} args Final JVM args array
+     * @returns {Array<string>} args with diagnostic flags appended
+     */
+    _applyNetworkDiagnostics(args) {
+        if (!NETWORK_DIAGNOSTICS) {
+            return args
+        }
+        const hasProp = (prefix) => args.some(a => typeof a === 'string' && a.startsWith(prefix))
+
+        const dumpDir = path.join(this.gameDir, 'crash-dumps')
+        try {
+            fs.ensureDirSync(dumpDir)
+        } catch (err) {
+            logger.warn(`Could not create crash-dump dir ${dumpDir}: ${err.message}`)
+        }
+
+        if (!hasProp('-XX:+HeapDumpOnOutOfMemoryError') && !hasProp('-XX:-HeapDumpOnOutOfMemoryError')) {
+            args.push('-XX:+HeapDumpOnOutOfMemoryError')
+            args.push('-XX:HeapDumpPath=' + dumpDir)
+            logger.info(`[DIAG] Heap dump on OOM enabled → ${dumpDir}`)
+        }
+
+        // Lightweight leak sampling — PARANOID records a stack per ByteBuf and
+        // its overhead can itself stall the network/render thread (confounding
+        // a timeout investigation). 'simple' samples ~1% with near-zero cost.
+        if (!hasProp('-Dio.netty.leakDetection.level') && !hasProp('-Dio.netty.leakDetectionLevel')) {
+            args.push('-Dio.netty.leakDetection.level=simple')
+            logger.info('[DIAG] Netty leak detection set to SIMPLE (low overhead).')
+        }
+
+        // GC + safepoint logging. A "Total time for which application threads
+        // were stopped" line of ~tens of seconds right before a server timeout
+        // means a GC/safepoint stall froze the client past the keep-alive
+        // window. Confirms (or rules out) GC pressure as the disconnect cause.
+        if (!hasProp('-Xlog:gc') && !hasProp('-Xlog:safepoint')) {
+            const gcLog = path.join(dumpDir, 'gc.log')
+            args.push(`-Xlog:gc*,safepoint:file=${gcLog}:tags,uptime,time,level:filecount=5,filesize=20M`)
+            logger.info(`[DIAG] GC + safepoint logging enabled → ${gcLog}`)
+        }
+
+        logger.warn('[DIAG] NETWORK_DIAGNOSTICS is ON — diagnostic build, do not release publicly.')
         return args
     }
 
@@ -1382,6 +1461,9 @@ class ProcessBuilder {
         // Bound off-heap memory (fixes direct-buffer OOM on high-RAM configs)
         args = this._applyDirectMemoryCap(args)
 
+        // Diagnostic flags (heap dump + netty paranoid) — gated by NETWORK_DIAGNOSTICS
+        args = this._applyNetworkDiagnostics(args)
+
         args.push('-Djava.library.path=' + tempNativePath)
 
         // ✅ NEOFORGE: Add JVM argument to disable early progress window (fallback to fml.toml)
@@ -1541,6 +1623,9 @@ class ProcessBuilder {
 
         // Bound off-heap memory (fixes direct-buffer OOM on high-RAM configs)
         args = this._applyDirectMemoryCap(args)
+
+        // Diagnostic flags (heap dump + netty paranoid) — gated by NETWORK_DIAGNOSTICS
+        args = this._applyNetworkDiagnostics(args)
 
         // ✅ NEOFORGE: Add JVM argument to disable early progress window (fallback to fml.toml)
         if (this.usingNeoForgeLoader) {

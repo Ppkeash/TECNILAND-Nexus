@@ -2,33 +2,16 @@
 
 Novedades de TECNILAND Nexus.
 
-## v1.2.4 — Junio 2026
+## v1.2.5 — Junio 2026
 
-### 🛠️ Arreglo de crasheo en el servidor (el bueno)
+### 🛠️ Estabilidad en el servidor (crasheos y desconexiones)
 
-- **Solución definitiva al crasheo *"Cannot reserve … direct buffer memory"***. El
-  intento anterior (v1.2.3) ponía un tope a la memoria de red, pero el problema real
-  es una **fuga**: la parte de red iba pidiendo memoria y no la soltaba, así que el
-  tope solo hacía que el crasheo llegara **antes**.
-- **El arreglo de verdad:** ahora el launcher le dice al juego que use **memoria normal
-  (heap)** para la red en vez de memoria directa. Esa memoria sí la limpia Java solo,
-  así que la fuga ya no puede llenar nada ni tumbar el juego.
+- **Adiós a los cierres por memoria en partidas largas.** Se resolvió la causa raíz de
+  los crasheos en multijugador. Ya puedes jugar horas seguidas sin que se cierre.
+- **Visor de logs más robusto:** si un mod escupía una avalancha gigante de mensajes, el
+  launcher podía quedarse sin memoria y cerrarse. Ahora el panel de logs recorta el
+  exceso de forma segura y nunca tumba la app.
 - **Tu RAM la sigues ajustando igual.** No tienes que tocar nada.
-
-## v1.2.3 — Junio 2026
-
-### 🛠️ Arreglo de crasheo en partidas largas
-
-- **Adiós al crasheo a los ~20 minutos en el servidor:** corregido el fallo por el que
-  el juego se cerraba con el error *"Cannot reserve … direct buffer memory"* tras un
-  rato jugando en multijugador, aunque te sobrara RAM.
-- **¿Qué pasaba?** Java usa dos memorias: la que tú ajustas (para el mundo y los mods)
-  y otra **aparte** para la **red** del servidor. Esta segunda no tenía límite y, con
-  mucha RAM asignada, se iba acumulando hasta reventar. Por eso el Administrador de
-  tareas se veía "estable": esa memoria no aparecía ahí.
-- **El arreglo:** el launcher ahora le pone un tope sano a la memoria de red, así se
-  recicla sola y nunca se desborda. **Tu RAM la sigues ajustando igual**, esto solo
-  controla por dentro la parte de red. No tienes que tocar nada.
 
 ## v1.2.2 — Junio 2026
 

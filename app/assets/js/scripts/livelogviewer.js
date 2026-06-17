@@ -28,6 +28,12 @@
     const MAX_LOG_LINES = 2000       // Maximum lines in buffer
     const FLUSH_INTERVAL_MS = 100    // Batch updates every 100ms
     const TRIM_AMOUNT = 500          // Lines to remove when max reached
+    // Hard cap on un-flushed entries. A log-spammy mod (or paranoid Netty leak
+    // detection) can dump hundreds of thousands of lines in a single burst.
+    // Without this cap, pendingLogs and the flush DocumentFragment grow until
+    // the renderer process runs out of memory (Chromium "Oilpan" OOM crash).
+    const MAX_PENDING_LOGS = 6000
+    let droppedLogs = 0              // Count of lines dropped under flood
 
     // =========================================================================
     // State
@@ -545,6 +551,10 @@
     }
 
     function onLogData(event) {
+        // Skip all processing if the viewer is disabled — no point buffering
+        // logs the user can't see, and it avoids OOM risk from log floods.
+        if (!ConfigManager.getShowLiveLogs()) return
+
         const { data, isError } = event.detail
         if (!data) return
 
@@ -562,7 +572,7 @@
     // =========================================================================
     function addLogLine(text, source = 'stdout') {
         const level = classifyLogLevel(text, source)
-        
+
         pendingLogs.push({
             text,
             source,
@@ -570,6 +580,15 @@
             timestamp: getTimestamp(),
             raw: text
         })
+
+        // Flood guard: bulk-drop oldest pending lines so the buffer (and the
+        // next flush's DOM fragment) can never grow without bound. Done in bulk
+        // to keep this O(1) amortized even under a burst of 100k+ lines.
+        if (pendingLogs.length > MAX_PENDING_LOGS) {
+            const drop = pendingLogs.length - MAX_LOG_LINES
+            pendingLogs.splice(0, drop)
+            droppedLogs += drop
+        }
 
         // Ensure flush timer is running
         startFlushTimer()
@@ -601,6 +620,16 @@
 
     function flushLogs() {
         if (pendingLogs.length === 0) return
+
+        // Never build more DOM nodes than the buffer can hold: any pending
+        // lines beyond MAX_LOG_LINES would be trimmed away immediately anyway,
+        // so discard them up front. This bounds the DocumentFragment size and
+        // prevents the renderer OOM under a log flood.
+        if (pendingLogs.length > MAX_LOG_LINES) {
+            const drop = pendingLogs.length - MAX_LOG_LINES
+            pendingLogs.splice(0, drop)
+            droppedLogs += drop
+        }
 
         // Remove welcome message if present
         const welcome = logViewerContent.querySelector('.llv-welcome')
@@ -688,7 +717,8 @@
         logBuffer = []
         pendingLogs = []
         lineCount = 0
-        
+        droppedLogs = 0
+
         logViewerContent.innerHTML = `
             <div class="llv-welcome">
                 📋 Logs limpiados.<br>
@@ -789,7 +819,9 @@
 
     function updateLineCount() {
         if (logViewerLineCount) {
-            logViewerLineCount.textContent = `${lineCount} líneas`
+            logViewerLineCount.textContent = droppedLogs > 0
+                ? `${lineCount} líneas (${droppedLogs} omitidas por exceso)`
+                : `${lineCount} líneas`
         }
     }
 
@@ -808,10 +840,11 @@
         })
     }
 
+    const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
     function escapeHtml(text) {
-        const div = document.createElement('div')
-        div.textContent = text
-        return div.innerHTML
+        // String-based escape — avoids creating a throwaway <div> per line,
+        // which matters when flushing thousands of lines at once.
+        return String(text).replace(/[&<>"']/g, (c) => HTML_ESCAPES[c])
     }
 
     function showButtonFeedback(buttonId, text) {
