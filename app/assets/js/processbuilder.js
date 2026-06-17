@@ -892,11 +892,40 @@ class ProcessBuilder {
             
             // Add custom args to base
             args = args.concat(customArgs)
-            
+
             // Deduplicate
             args = this._deduplicateJvmArgs(args)
         }
-        
+
+        return args
+    }
+
+    /**
+     * Cap off-heap (direct) memory used by Netty.
+     *
+     * By default the JVM sets MaxDirectMemorySize == -Xmx. With a large heap
+     * (e.g. 8.5G) Netty's pooled allocator sizes its arenas relative to that
+     * huge ceiling and never releases them under sustained multiplayer packet
+     * load, leading to:
+     *   "OutOfMemoryError: Cannot reserve N bytes of direct buffer memory"
+     * after ~20 min in-server. Heap stays healthy so it looks like a leak.
+     *
+     * Capping direct memory forces buffer reuse and bounds off-heap growth.
+     * We only inject the cap if the user (or modManifest) hasn't set one, so
+     * advanced users keep full control.
+     *
+     * @param {Array<string>} args Final JVM args array
+     * @returns {Array<string>} args with a direct-memory cap if none present
+     */
+    _applyDirectMemoryCap(args) {
+        const hasCap = args.some(a => typeof a === 'string' && a.startsWith('-XX:MaxDirectMemorySize'))
+        if (hasCap) {
+            logger.info('MaxDirectMemorySize already set by user/manifest; leaving as-is.')
+            return args
+        }
+        const cap = '-XX:MaxDirectMemorySize=2G'
+        args.push(cap)
+        logger.info(`Injected ${cap} to bound Netty off-heap memory (prevents direct-buffer OOM).`)
         return args
     }
 
@@ -1338,7 +1367,10 @@ class ProcessBuilder {
         
         // Merge custom JVM args (global + legacy) with deduplication
         args = this._mergeCustomJvmArgs(args, this.server.rawServer.id)
-        
+
+        // Bound off-heap memory (fixes direct-buffer OOM on high-RAM configs)
+        args = this._applyDirectMemoryCap(args)
+
         args.push('-Djava.library.path=' + tempNativePath)
 
         // ✅ NEOFORGE: Add JVM argument to disable early progress window (fallback to fml.toml)
@@ -1495,6 +1527,9 @@ class ProcessBuilder {
         
         // Merge custom JVM args (global + legacy) with deduplication
         args = this._mergeCustomJvmArgs(args, this.server.rawServer.id)
+
+        // Bound off-heap memory (fixes direct-buffer OOM on high-RAM configs)
+        args = this._applyDirectMemoryCap(args)
 
         // ✅ NEOFORGE: Add JVM argument to disable early progress window (fallback to fml.toml)
         if (this.usingNeoForgeLoader) {
